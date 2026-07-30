@@ -3,7 +3,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/bashfulrobot/snowstorm/internal/cli"
@@ -11,7 +10,7 @@ import (
 
 func main() {
 	if err := cli.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, "snowstorm:", err)
+		cli.PrintError(err)
 		os.Exit(1)
 	}
 }

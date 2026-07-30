@@ -44,6 +44,11 @@ every invocation; explicit flags always win. All fields are optional:
   human      = true
   query_dir  = "/custom/path/to/queries"`,
 	SilenceUsage: true,
+	// SilenceErrors: cobra's own error printer is turned off tool-wide so
+	// PrintError (errstyle.go) is the only thing that ever writes a command
+	// error to stderr -- otherwise every error would print twice (cobra's
+	// "Error: ..." plus main.go's own "snowstorm: ..." line).
+	SilenceErrors: true,
 	// PersistentPreRunE runs before every command's RunE (commands below
 	// don't define their own, so this one applies tool-wide) and resolves
 	// --connection against config.toml before connect() (see connect.go)
@@ -85,6 +90,8 @@ func init() {
 		`override directory containing connections.toml (default: ~/.snowflake)`)
 	rootCmd.PersistentFlags().DurationVar(&flagTimeout, "timeout", 30*time.Second,
 		`timeout for the initial connection check (does not bound query execution)`)
+	rootCmd.PersistentFlags().BoolVar(&flagNoColor, "no-color", false,
+		`disable the colorized "Error:" prefix on command errors (also respects the NO_COLOR env var)`)
 }
 
 // Execute runs the root command; call this from main().
