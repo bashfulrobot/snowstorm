@@ -42,6 +42,18 @@ type Options struct {
 // Auth is whatever the named connection specifies (e.g. authenticator =
 // "externalbrowser" opens a browser window for interactive SSO) -- this is
 // meant to be run interactively, not from a headless/unattended context.
+// "snowstorm login" is the dedicated command for triggering this explicitly.
+//
+// connections.toml is user-owned config outside this package's control, but
+// two of its fields are worth knowing about if browser popups happen more
+// often than expected: client_store_temporary_credential (caches the SSO id
+// token for authenticator = "externalbrowser") and client_request_mfa_token
+// (same idea, for authenticator = "username_password_mfa"). Both default to
+// on for Windows/macOS but off for Linux (gosnowflake v2.1.0), and on Linux
+// need no keyring daemon -- just a plain file cache under
+// ~/.cache/snowflake (see README.md). Neither controls how long the cached
+// token stays valid; that's governed entirely by the Snowflake account's
+// server-side auth/session policies, not anything client-side.
 func Connect(ctx context.Context, opts Options) (*sql.DB, error) {
 	if opts.ConnectionName != "" {
 		if err := os.Setenv(envConnectionName, opts.ConnectionName); err != nil {
