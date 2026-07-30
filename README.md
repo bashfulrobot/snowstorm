@@ -10,7 +10,7 @@ consume its JSON.
 Uses the same `~/.snowflake/connections.toml` the Snowflake connectors read, e.g.:
 
 ```toml
-[connections.my_example_connection]
+[kong-revops]
 account = "CGLFPQY-HVA68606"
 user = "you@example.com"
 authenticator = "externalbrowser"
@@ -20,25 +20,28 @@ database = "SOME_DB"
 schema = "SOME_SCHEMA"
 ```
 
+Note the flat `[name]` table -- gosnowflake's own connections.toml loader wants this,
+not the nested `[connections.name]` shape the Snowflake CLI/Python connector use.
+
 `externalbrowser` opens a browser window for SSO -- run interactively, not headless/cron.
 
 ## Usage
 
 ```sh
 # connectivity check
-snowstorm ping -c my_example_connection
+snowstorm ping -c kong-revops
 
 # run SQL: inline, from a file, or piped via stdin
-snowstorm query -c my_example_connection "SELECT * FROM MY_TABLE LIMIT 10"
-snowstorm query -c my_example_connection --file query.sql
-cat query.sql | snowstorm query -c my_example_connection
+snowstorm query -c kong-revops "SELECT * FROM MY_TABLE LIMIT 10"
+snowstorm query -c kong-revops --file query.sql
+cat query.sql | snowstorm query -c kong-revops
 
 # --format table for a human-readable view (default is JSON)
-snowstorm query -c my_example_connection --format table "SELECT 1"
+snowstorm query -c kong-revops --format table "SELECT 1"
 
 # explore schema
-snowstorm discover -c my_example_connection --database DB --schema SCHEMA
-snowstorm discover -c my_example_connection --database DB --schema SCHEMA --table MY_TABLE --sample 20
+snowstorm discover -c kong-revops --database DB --schema SCHEMA
+snowstorm discover -c kong-revops --database DB --schema SCHEMA --table MY_TABLE --sample 20
 ```
 
 ### Predefined queries
@@ -62,7 +65,7 @@ sql = "SHOW WAREHOUSES"
 
 ```sh
 snowstorm queries list
-snowstorm query -c my_example_connection --saved whoami
+snowstorm query -c kong-revops --saved whoami
 ```
 
 ## Global flags

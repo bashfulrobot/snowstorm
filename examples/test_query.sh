@@ -3,7 +3,7 @@
 # Usage: examples/test_query.sh [connection-name]
 set -euo pipefail
 
-connection="${1:-my_example_connection}"
+connection="${1:-kong-revops}"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 query_file="$script_dir/queries/konnect_buy_vs_use_monthly.txt"
 
