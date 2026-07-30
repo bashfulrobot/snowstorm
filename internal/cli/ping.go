@@ -45,5 +45,5 @@ func runPing(cmd *cobra.Command, args []string) error {
 	}
 	defer closer.Close()
 
-	return writeResult(w, res, "json")
+	return writeResult(w, res, "json", false, false)
 }
