@@ -8,40 +8,76 @@ import (
 	"github.com/bashfulrobot/snowstorm/internal/query"
 )
 
-func TestFormatHuman(t *testing.T) {
+func TestFormatNumberDefault(t *testing.T) {
+	// human=false: always comma-group from 1,000 up, never abbreviate.
 	cases := []struct {
 		in   float64
 		want string
+		ok   bool
 	}{
-		{999, "999"},
-		{1000, "1,000"},
-		{12345, "12,345"},
-		{999999, "999,999"},
-		{1000000, "1M"},
-		{1234567, "1.2M"},
-		{5000000000, "5B"},
-		{5234000000, "5.2B"},
-		{12345678901, "12.3B"},
-		{1000000000000, "1T"},
-		{-1500, "-1,500"},
-		{-2500000, "-2.5M"},
+		{999, "", false},
+		{1000, "1,000", true},
+		{12345, "12,345", true},
+		{999999, "999,999", true},
+		{1000000, "1,000,000", true},
+		{5234000000, "5,234,000,000", true},
+		{12345678901, "12,345,678,901", true},
+		{-1500, "-1,500", true},
+		{-2500000, "-2,500,000", true},
 	}
 	for _, c := range cases {
-		if got := formatHuman(c.in); got != c.want {
-			t.Errorf("formatHuman(%v) = %q, want %q", c.in, got, c.want)
+		got, ok := formatNumber(c.in, false)
+		if ok != c.ok || (ok && got != c.want) {
+			t.Errorf("formatNumber(%v, false) = (%q, %v), want (%q, %v)", c.in, got, ok, c.want, c.ok)
 		}
 	}
 }
 
-func TestCellStringHuman(t *testing.T) {
+func TestFormatNumberHuman(t *testing.T) {
+	// human=true: comma-group 1,000-1M, abbreviate with K/M/B/T from 1M up.
+	cases := []struct {
+		in   float64
+		want string
+		ok   bool
+	}{
+		{999, "", false},
+		{1000, "1,000", true},
+		{12345, "12,345", true},
+		{999999, "999,999", true},
+		{1000000, "1M", true},
+		{1234567, "1.2M", true},
+		{5000000000, "5B", true},
+		{5234000000, "5.2B", true},
+		{12345678901, "12.3B", true},
+		{1000000000000, "1T", true},
+		{-1500, "-1,500", true},
+		{-2500000, "-2.5M", true},
+	}
+	for _, c := range cases {
+		got, ok := formatNumber(c.in, true)
+		if ok != c.ok || (ok && got != c.want) {
+			t.Errorf("formatNumber(%v, true) = (%q, %v), want (%q, %v)", c.in, got, ok, c.want, c.ok)
+		}
+	}
+}
+
+func TestCellStringNumbers(t *testing.T) {
+	// Commas apply by default (no --human needed) -- this was the reported gap:
+	// large numbers in plain `--format table` output were unreadable digit soup.
+	if got := cellString(int64(3300000000), false); got != "3,300,000,000" {
+		t.Errorf("cellString(3300000000, false) = %q, want %q (commas by default)", got, "3,300,000,000")
+	}
 	if got := cellString(int64(4200), true); got != "4,200" {
 		t.Errorf("cellString(4200, true) = %q, want %q", got, "4,200")
 	}
 	if got := cellString(int64(500), true); got != "500" {
 		t.Errorf("cellString(500, true) = %q, want %q (below 1000 stays plain)", got, "500")
 	}
-	if got := cellString(int64(4200), false); got != "4200" {
-		t.Errorf("cellString(4200, false) = %q, want %q (no --human, no grouping)", got, "4200")
+	if got := cellString(int64(4200), false); got != "4,200" {
+		t.Errorf("cellString(4200, false) = %q, want %q (no --human, commas still apply)", got, "4,200")
+	}
+	if got := cellString(0.258, false); got != "0.258" {
+		t.Errorf("cellString(0.258, false) = %q, want %q (small decimals stay exact, untouched)", got, "0.258")
 	}
 	if got := cellString(nil, true); got != "NULL" {
 		t.Errorf("cellString(nil, true) = %q, want NULL", got)
