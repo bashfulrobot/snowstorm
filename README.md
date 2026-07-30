@@ -10,14 +10,19 @@ consume its JSON.
 Uses the same `~/.snowflake/connections.toml` the Snowflake connectors read, e.g.:
 
 ```toml
-[kong-revops]
-account = "CGLFPQY-HVA68606"
+[my_connection]
+account = "YOUR_ACCOUNT_LOCATOR"
 user = "you@example.com"
 authenticator = "externalbrowser"
 role = "SOME_ROLE"
 warehouse = "SOME_WAREHOUSE"
 database = "SOME_DB"
 schema = "SOME_SCHEMA"
+
+# Optional: caches the SSO/MFA token so externalbrowser doesn't reopen a
+# browser on every run. Auto-enabled on Windows/macOS; on Linux it needs
+# a Secret Service provider (e.g. gnome-keyring) and this explicit flag.
+client_store_temporary_credential = true
 ```
 
 Note the flat `[name]` table -- gosnowflake's own connections.toml loader wants this,
@@ -29,19 +34,19 @@ not the nested `[connections.name]` shape the Snowflake CLI/Python connector use
 
 ```sh
 # connectivity check
-snowstorm ping -c kong-revops
+snowstorm ping -c my_connection
 
 # run SQL: inline, from a file, or piped via stdin
-snowstorm query -c kong-revops "SELECT * FROM MY_TABLE LIMIT 10"
-snowstorm query -c kong-revops --file query.sql
-cat query.sql | snowstorm query -c kong-revops
+snowstorm query -c my_connection "SELECT * FROM MY_TABLE LIMIT 10"
+snowstorm query -c my_connection --file query.sql
+cat query.sql | snowstorm query -c my_connection
 
 # --format table for a human-readable view (default is JSON)
-snowstorm query -c kong-revops --format table "SELECT 1"
+snowstorm query -c my_connection --format table "SELECT 1"
 
 # explore schema
-snowstorm discover -c kong-revops --database DB --schema SCHEMA
-snowstorm discover -c kong-revops --database DB --schema SCHEMA --table MY_TABLE --sample 20
+snowstorm discover -c my_connection --database DB --schema SCHEMA
+snowstorm discover -c my_connection --database DB --schema SCHEMA --table MY_TABLE --sample 20
 ```
 
 ### Predefined queries
@@ -65,7 +70,7 @@ sql = "SHOW WAREHOUSES"
 
 ```sh
 snowstorm queries list
-snowstorm query -c kong-revops --saved whoami
+snowstorm query -c my_connection --saved whoami
 ```
 
 ## Global flags
