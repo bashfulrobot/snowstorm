@@ -19,21 +19,40 @@ warehouse = "SOME_WAREHOUSE"
 database = "SOME_DB"
 schema = "SOME_SCHEMA"
 
-# Optional: caches the SSO/MFA token so externalbrowser doesn't reopen a
-# browser on every run. Auto-enabled on Windows/macOS; on Linux it needs
-# a Secret Service provider (e.g. gnome-keyring) and this explicit flag.
+# Optional: caches the SSO id token so externalbrowser doesn't reopen a
+# browser on every run -- reused automatically as long as it's still valid.
+# Auto-enabled on Windows/macOS; on Linux it defaults OFF and needs this
+# explicit flag. No keyring/Secret Service daemon required on Linux -- the
+# driver caches it in a plain file (0600, owned by you) under
+# $SF_TEMPORARY_CREDENTIAL_CACHE_DIR, $XDG_CACHE_DIR/snowflake, or
+# ~/.cache/snowflake by default.
 client_store_temporary_credential = true
+
+# Same idea, for authenticator = "username_password_mfa": caches the MFA
+# token instead of the SSO id token. Same Linux-defaults-off caveat.
+# client_request_mfa_token = true
 ```
 
 Note the flat `[name]` table -- gosnowflake's own connections.toml loader wants this,
 not the nested `[connections.name]` shape the Snowflake CLI/Python connector use.
 
 `externalbrowser` opens a browser window for SSO -- run interactively, not headless/cron.
+Run `snowstorm login` to establish or refresh that session explicitly (`snowstorm ping`
+is for a quick connectivity check once you're already logged in, not for logging in).
+
+These flags only control whether the token is *cached and reused*; how long the cached
+token stays valid is entirely up to your Snowflake account's authentication/session
+policies (server-side) -- snowstorm and gosnowflake have no client-side setting that
+lengthens it. If you're still re-authenticating more often than expected with the flag
+set, that's a policy question for your Snowflake account admin, not a snowstorm one.
 
 ## Usage
 
 ```sh
-# connectivity check
+# log in / refresh an interactive session (browser popup for externalbrowser, if needed)
+snowstorm login -c my_connection
+
+# connectivity check (assumes you're already logged in)
 snowstorm ping -c my_connection
 
 # run SQL: inline, from a file, or piped via stdin

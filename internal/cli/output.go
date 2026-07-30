@@ -104,7 +104,7 @@ func groupByAccount(res *query.Result, col string) groupedResult {
 	order := make([]string, 0)
 	groups := make(map[string]*accountGroup)
 	for _, row := range res.Rows {
-		key := cellString(row[col], false)
+		key := cellString(row[col], col, false)
 		g, ok := groups[key]
 		if !ok {
 			g = &accountGroup{Account: key, Rows: make([]map[string]any, 0)}
@@ -141,15 +141,28 @@ func writeTable(w io.Writer, res *query.Result, human, groupAccounts bool) error
 func writeFlatTable(w io.Writer, columns []string, rows []map[string]any, human bool, rowCount int) error {
 	tw := tabwriter.NewWriter(w, 0, 2, 2, ' ', 0)
 	fmt.Fprintln(tw, strings.Join(columns, "\t"))
+	// A row of dashes sized to each header's rune length, run through the
+	// same tabwriter as every other row so its columns pad/align exactly
+	// like the data below it -- no manual width math against tabwriter's
+	// own padding rules.
+	sep := make([]string, len(columns))
+	for i, col := range columns {
+		sep[i] = strings.Repeat("-", len([]rune(col)))
+	}
+	fmt.Fprintln(tw, strings.Join(sep, "\t"))
 	for _, row := range rows {
 		cells := make([]string, len(columns))
 		for i, col := range columns {
-			cells[i] = cellString(row[col], human)
+			cells[i] = cellString(row[col], col, human)
 		}
 		fmt.Fprintln(tw, strings.Join(cells, "\t"))
 	}
 	if err := tw.Flush(); err != nil {
 		return err
+	}
+	if rowCount == 0 {
+		fmt.Fprintln(w, "(no rows returned)")
+		return nil
 	}
 	fmt.Fprintf(w, "(%d row(s))\n", rowCount)
 	return nil
@@ -168,7 +181,7 @@ func writeGroupedTable(w io.Writer, res *query.Result, col string, human bool) e
 	order := make([]string, 0)
 	grouped := make(map[string][]map[string]any)
 	for _, row := range res.Rows {
-		key := cellString(row[col], false)
+		key := cellString(row[col], col, false)
 		if _, ok := grouped[key]; !ok {
 			order = append(order, key)
 		}
@@ -185,22 +198,34 @@ func writeGroupedTable(w io.Writer, res *query.Result, col string, human bool) e
 			return err
 		}
 	}
+	if res.RowCount == 0 {
+		fmt.Fprintln(w, "(no rows returned)")
+		return nil
+	}
 	fmt.Fprintf(w, "\n(%d row(s) total, %d account(s))\n", res.RowCount, len(order))
 	return nil
 }
 
-func cellString(v any, human bool) string {
+func cellString(v any, colName string, human bool) string {
 	if v == nil {
-		return "NULL"
+		return "-"
 	}
 	if f, ok := toFloat(v); ok {
+		if human && f > 0 && f < 1 && isRatioColumn(colName) {
+			return percentString(f)
+		}
 		if s, ok := formatNumber(f, human); ok {
 			return s
 		}
 	}
 	switch t := v.(type) {
 	case string:
-		return t
+		s := t
+		if human {
+			s = shortenTimestamp(s)
+			s = truncateLong(s)
+		}
+		return s
 	default:
 		b, err := json.Marshal(t)
 		if err != nil {
@@ -208,6 +233,57 @@ func cellString(v any, human bool) string {
 		}
 		return string(b)
 	}
+}
+
+// isRatioColumn reports whether colName has RATE, RATIO, PERCENT, or PCT as
+// one of its underscore-delimited tokens (case-insensitive), e.g.
+// "UTILIZATION_RATE_LIFETIME" and "EXCHANGE_RATE" both match on the "RATE"
+// token. This is deliberately loose (a substring match by token, not by
+// meaning) -- the value-range gate in cellString (strictly between 0 and 1)
+// is what actually keeps false positives like EXCHANGE_RATE=5 from being
+// rewritten as a percentage.
+func isRatioColumn(colName string) bool {
+	for tok := range strings.SplitSeq(strings.ToUpper(colName), "_") {
+		switch tok {
+		case "RATE", "RATIO", "PERCENT", "PCT":
+			return true
+		}
+	}
+	return false
+}
+
+// percentString renders a 0..1 fraction as a percentage, e.g. 0.258 -> "25.8%".
+func percentString(f float64) string {
+	return trimTrailingZero(f*100) + "%"
+}
+
+// timestampRe matches an RFC3339Nano-shaped string: date, "T", time, then an
+// optional fractional-second part and a "Z" or numeric offset. Anything that
+// doesn't fit this shape (e.g. a bare "2026-07") is left untouched.
+var timestampRe = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$`)
+
+// shortenTimestamp drops seconds/subseconds and the T/Z decoration from an
+// RFC3339Nano-shaped timestamp, e.g. "2026-07-29T12:00:00.000000000Z" ->
+// "2026-07-29 12:00". Strings that don't match the shape pass through as-is.
+func shortenTimestamp(s string) string {
+	if !timestampRe.MatchString(s) {
+		return s
+	}
+	return s[:10] + " " + s[11:16]
+}
+
+// maxCellRunes bounds how long a string cell is allowed to render in
+// --human table output before it gets truncated with an ellipsis, so a
+// single long COMMENT-style value doesn't blow out the whole table's
+// column widths.
+const maxCellRunes = 70
+
+func truncateLong(s string) string {
+	r := []rune(s)
+	if len(r) <= maxCellRunes {
+		return s
+	}
+	return string(r[:maxCellRunes]) + "..."
 }
 
 // formatNumber renders large numeric values the way a person reading a table

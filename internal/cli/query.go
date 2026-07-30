@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/bashfulrobot/snowstorm/internal/config"
 	"github.com/bashfulrobot/snowstorm/internal/query"
 	"github.com/spf13/cobra"
 )
@@ -40,7 +41,11 @@ comma-grouped there (12,345,678), exact, no flag needed. Add --human to
 additionally abbreviate numbers of 1,000,000+ with a K/M/B/T suffix (5B,
 1.2M) for a quicker scan -- that rounds, so it's opt-in. JSON is always
 exact either way. A column named ACCOUNT/ACCOUNT_NAME is grouped instead of
-repeated on every row, in both --format table and JSON.`,
+repeated on every row, in both --format table and JSON.
+
+--format, --human, and --query-dir can also be defaulted from
+~/.snowstorm/config.toml so they don't need to be passed every time;
+explicit flags always win over it.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runQuery,
 }
@@ -56,6 +61,14 @@ func init() {
 }
 
 func runQuery(cmd *cobra.Command, args []string) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	flagQueryFormat = resolveFormat(cmd.Flags().Changed("format"), flagQueryFormat, cfg.Format)
+	flagQueryHuman = resolveHuman(cmd.Flags().Changed("human"), flagQueryHuman, cfg.Human)
+	flagQueryDir = resolveQueryDir(cmd.Flags().Changed("query-dir"), flagQueryDir, os.Getenv("SNOWSTORM_QUERY_DIR"), cfg.QueryDir)
+
 	sqlText, err := resolveSQL(args)
 	if err != nil {
 		return err
@@ -105,4 +118,40 @@ func resolveSQL(args []string) (string, error) {
 		return "", fmt.Errorf("read stdin: %w", err)
 	}
 	return string(b), nil
+}
+
+// resolveFormat applies the --format priority: explicit flag > config.toml's
+// format > the built-in default ("json"). There's no env var tier here.
+func resolveFormat(flagChanged bool, flagValue, configValue string) string {
+	if flagChanged {
+		return flagValue
+	}
+	if configValue != "" {
+		return configValue
+	}
+	return "json"
+}
+
+// resolveHuman applies the --human priority: explicit flag > config.toml's
+// human > false. --human is a bool flag, so its Changed() state must be
+// checked explicitly -- the zero value false is indistinguishable from an
+// explicit --human=false.
+func resolveHuman(flagChanged, flagValue, configValue bool) bool {
+	if flagChanged {
+		return flagValue
+	}
+	return configValue
+}
+
+// resolveQueryDir applies the --query-dir priority: explicit flag >
+// $SNOWSTORM_QUERY_DIR > config.toml's query_dir > "" (queryDir(), in
+// savedquery.go, falls back to ~/.snowstorm/queries when it sees "").
+func resolveQueryDir(flagChanged bool, flagValue, envValue, configValue string) string {
+	if flagChanged {
+		return flagValue
+	}
+	if envValue != "" {
+		return envValue
+	}
+	return configValue
 }
