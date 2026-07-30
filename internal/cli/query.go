@@ -35,9 +35,11 @@ $SNOWSTORM_QUERY_DIR) as either <name>.sql (plain text) or <name>.toml
 (structured: name/description/sql fields) -- see 'snowstorm queries list'.
 
 Output defaults to JSON: {"columns": [...], "rows": [{...}, ...], "row_count": N}.
-Use --format table for a human-readable view, and --human to abbreviate large
-numbers (5B, 1.2M) and comma-group the rest (12,345) in that table -- JSON is
-always exact. A column named ACCOUNT/ACCOUNT_NAME is grouped instead of
+Use --format table for a human-readable view: numbers of 1,000+ are always
+comma-grouped there (12,345,678), exact, no flag needed. Add --human to
+additionally abbreviate numbers of 1,000,000+ with a K/M/B/T suffix (5B,
+1.2M) for a quicker scan -- that rounds, so it's opt-in. JSON is always
+exact either way. A column named ACCOUNT/ACCOUNT_NAME is grouped instead of
 repeated on every row, in both --format table and JSON.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runQuery,
@@ -48,7 +50,7 @@ func init() {
 	queryCmd.Flags().StringVarP(&flagQuerySaved, "saved", "s", "", "run a predefined query by name from --query-dir")
 	queryCmd.Flags().StringVar(&flagQueryDir, "query-dir", "", "directory of predefined queries (default ~/.snowstorm/queries or $SNOWSTORM_QUERY_DIR)")
 	queryCmd.Flags().StringVar(&flagQueryFormat, "format", "json", "output format: json or table")
-	queryCmd.Flags().BoolVar(&flagQueryHuman, "human", false, "table format only: abbreviate large numbers (5B) and comma-group the rest (12,345)")
+	queryCmd.Flags().BoolVar(&flagQueryHuman, "human", false, "table format only: also abbreviate large numbers (5B, 1.2M); commas apply either way")
 	queryCmd.Flags().StringVarP(&flagQueryOut, "out", "o", "-", "output path, or - for stdout")
 	rootCmd.AddCommand(queryCmd)
 }

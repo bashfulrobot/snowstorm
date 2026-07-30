@@ -193,8 +193,8 @@ func cellString(v any, human bool) string {
 	if v == nil {
 		return "NULL"
 	}
-	if human {
-		if s, ok := humanNumber(v); ok {
+	if f, ok := toFloat(v); ok {
+		if s, ok := formatNumber(f, human); ok {
 			return s
 		}
 	}
@@ -210,19 +210,34 @@ func cellString(v any, human bool) string {
 	}
 }
 
-// humanNumber renders large numeric values the way a person reading a table
-// wants them: comma-grouped from 1,000 up, abbreviated with a K/M/B/T suffix
-// from 1,000,000 up (e.g. 5B, 12,345, 1.2M). Values under 1,000, or values
-// that aren't numeric, fall through to normal formatting.
-func humanNumber(v any) (string, bool) {
-	f, ok := toFloat(v)
-	if !ok {
+// formatNumber renders large numeric values the way a person reading a table
+// wants them: comma-grouped from 1,000 up, always (12,345,678,901 stays
+// exact -- no flag needed). With human set, it additionally abbreviates from
+// 1,000,000 up with a K/M/B/T suffix (5B, 1.2M) for a quick-scan view; that
+// rounding is opt-in since it trades precision for brevity. Values under
+// 1,000, or values that aren't numeric, fall through to normal formatting
+// (ok=false) so exact decimals like 0.258 print untouched.
+func formatNumber(f float64, human bool) (string, bool) {
+	neg := f < 0
+	af := math.Abs(f)
+
+	var s string
+	switch {
+	case human && af >= 1e12:
+		s = trimTrailingZero(af/1e12) + "T"
+	case human && af >= 1e9:
+		s = trimTrailingZero(af/1e9) + "B"
+	case human && af >= 1e6:
+		s = trimTrailingZero(af/1e6) + "M"
+	case af >= 1000:
+		s = commaGroup(af)
+	default:
 		return "", false
 	}
-	if math.Abs(f) < 1000 {
-		return "", false
+	if neg {
+		s = "-" + s
 	}
-	return formatHuman(f), true
+	return s, true
 }
 
 func toFloat(v any) (float64, bool) {
@@ -240,27 +255,6 @@ func toFloat(v any) (float64, bool) {
 	default:
 		return 0, false
 	}
-}
-
-func formatHuman(f float64) string {
-	neg := f < 0
-	af := math.Abs(f)
-
-	var s string
-	switch {
-	case af >= 1e12:
-		s = trimTrailingZero(af/1e12) + "T"
-	case af >= 1e9:
-		s = trimTrailingZero(af/1e9) + "B"
-	case af >= 1e6:
-		s = trimTrailingZero(af/1e6) + "M"
-	default: // 1,000 <= af < 1,000,000
-		s = commaGroup(af)
-	}
-	if neg {
-		s = "-" + s
-	}
-	return s
 }
 
 func trimTrailingZero(f float64) string {
