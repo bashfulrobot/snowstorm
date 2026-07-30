@@ -10,9 +10,9 @@ func TestResolveFormat(t *testing.T) {
 		configValue string
 		want        string
 	}{
-		{"zero config, no flag: builtin default", false, "json", "", "json"},
-		{"explicit flag wins over config", true, "table", "json", "table"},
-		{"config used when flag not passed", false, "json", "table", "table"},
+		{"zero config, no flag: builtin default is now table", false, "table", "", "table"},
+		{"explicit flag wins over config", true, "json", "table", "json"},
+		{"config used when flag not passed", false, "table", "json", "json"},
 	}
 
 	for _, tc := range cases {
@@ -34,10 +34,11 @@ func TestResolveHuman(t *testing.T) {
 		configValue bool
 		want        bool
 	}{
-		{"zero config, no flag: builtin default false", false, false, false, false},
+		{"zero config, no flag: builtin default is now true", false, true, false, true},
 		{"explicit --human=true wins over config false", true, true, false, true},
 		{"explicit --human=false wins over config true", true, false, true, false},
-		{"config true used when flag not passed", false, false, true, true},
+		{"config true used when flag not passed: still true", false, true, true, true},
+		{"config false indistinguishable from unset, no flag: builtin default true wins", false, true, false, true},
 	}
 
 	for _, tc := range cases {

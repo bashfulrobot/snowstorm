@@ -2,8 +2,11 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"regexp"
+	"strings"
 
+	"github.com/bashfulrobot/snowstorm/internal/config"
 	"github.com/bashfulrobot/snowstorm/internal/query"
 	"github.com/spf13/cobra"
 )
@@ -14,6 +17,8 @@ var (
 	flagDiscoverTable    string
 	flagDiscoverSample   int
 	flagDiscoverOut      string
+	flagDiscoverFormat   string
+	flagDiscoverHuman    bool
 )
 
 var discoverCmd = &cobra.Command{
@@ -26,7 +31,13 @@ the generic query engine (INFORMATION_SCHEMA + SAMPLE under the hood).
   snowstorm discover --database DB --schema SCHEMA --table T      # list columns
   snowstorm discover --database DB --schema SCHEMA --table T --sample 20  # + sample rows
 
-Always prints JSON.`,
+Output defaults to a human-readable --format table: a "database: X, schema:
+Y[, table: Z]" header line above each sub-table (tables, or columns and an
+optional sample), the same grouped-table style 'snowstorm query' uses for
+per-account groups. Pass --format json for the old machine-parseable shape,
+byte-for-byte unchanged: {"database", "schema", "tables"} or {"database",
+"schema", "table", "columns", "sample"?}. --format and --human can also be
+defaulted from ~/.snowstorm/config.toml; explicit flags always win.`,
 	RunE: runDiscover,
 }
 
@@ -36,6 +47,8 @@ func init() {
 	discoverCmd.Flags().StringVar(&flagDiscoverTable, "table", "", "table to inspect (optional; lists columns instead of tables)")
 	discoverCmd.Flags().IntVar(&flagDiscoverSample, "sample", 0, "when --table is set, also fetch this many sample rows")
 	discoverCmd.Flags().StringVarP(&flagDiscoverOut, "out", "o", "-", "output path, or - for stdout")
+	discoverCmd.Flags().StringVar(&flagDiscoverFormat, "format", "table", "output format: json or table")
+	discoverCmd.Flags().BoolVar(&flagDiscoverHuman, "human", true, "table format only: also abbreviate large numbers; commas apply either way")
 	_ = discoverCmd.MarkFlagRequired("database")
 	_ = discoverCmd.MarkFlagRequired("schema")
 	rootCmd.AddCommand(discoverCmd)
@@ -55,6 +68,13 @@ func checkIdentifier(kind, name string) error {
 }
 
 func runDiscover(cmd *cobra.Command, args []string) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	flagDiscoverFormat = resolveFormat(cmd.Flags().Changed("format"), flagDiscoverFormat, cfg.Format)
+	flagDiscoverHuman = resolveHuman(cmd.Flags().Changed("human"), flagDiscoverHuman, cfg.Human)
+
 	if err := checkIdentifier("database", flagDiscoverDatabase); err != nil {
 		return err
 	}
@@ -97,25 +117,14 @@ ORDER BY table_name`,
 		return err
 	}
 
-	out := map[string]any{
-		"database": flagDiscoverDatabase,
-		"schema":   flagDiscoverSchema,
-	}
-	if flagDiscoverTable != "" {
-		out["table"] = flagDiscoverTable
-		out["columns"] = res
-	} else {
-		out["tables"] = res
-	}
-
+	var sampleRes *query.Result
 	if flagDiscoverTable != "" && flagDiscoverSample > 0 {
 		sampleSQL := fmt.Sprintf(`SELECT * FROM %s.%s.%s SAMPLE (%d ROWS)`,
 			flagDiscoverDatabase, flagDiscoverSchema, flagDiscoverTable, flagDiscoverSample)
-		sampleRes, err := query.Run(ctx, db, sampleSQL)
+		sampleRes, err = query.Run(ctx, db, sampleSQL)
 		if err != nil {
 			return fmt.Errorf("sample rows: %w", err)
 		}
-		out["sample"] = sampleRes
 	}
 
 	w, closer, err := openOutput(flagDiscoverOut)
@@ -124,5 +133,52 @@ ORDER BY table_name`,
 	}
 	defer closer.Close()
 
-	return writeJSON(w, out)
+	switch strings.ToLower(flagDiscoverFormat) {
+	case "", "json":
+		out := map[string]any{
+			"database": flagDiscoverDatabase,
+			"schema":   flagDiscoverSchema,
+		}
+		if flagDiscoverTable != "" {
+			out["table"] = flagDiscoverTable
+			out["columns"] = res
+			if sampleRes != nil {
+				out["sample"] = sampleRes
+			}
+		} else {
+			out["tables"] = res
+		}
+		return writeJSON(w, out)
+	case "table":
+		return writeDiscoverTable(w, res, sampleRes, flagDiscoverHuman)
+	default:
+		return fmt.Errorf("unknown --format %q (want json or table)", flagDiscoverFormat)
+	}
+}
+
+// writeDiscoverTable renders discover's --format table output: a header line
+// naming what's being shown, then a flat table per query.Result, in the same
+// "header line above a sub-table" style writeGroupedTable (output.go) uses
+// for per-account groups. flagDiscoverTable/-Database/-Schema/-Sample are
+// read directly (package-level flag vars, same as the rest of this file)
+// rather than threaded through as parameters.
+func writeDiscoverTable(w io.Writer, res, sampleRes *query.Result, human bool) error {
+	if flagDiscoverTable == "" {
+		fmt.Fprintf(w, "database: %s, schema: %s\n", flagDiscoverDatabase, flagDiscoverSchema)
+		return writeFlatTable(w, res.Columns, res.Rows, human, res.RowCount)
+	}
+
+	fmt.Fprintf(w, "database: %s, schema: %s, table: %s\n", flagDiscoverDatabase, flagDiscoverSchema, flagDiscoverTable)
+	if err := writeFlatTable(w, res.Columns, res.Rows, human, res.RowCount); err != nil {
+		return err
+	}
+
+	if sampleRes != nil {
+		fmt.Fprintln(w)
+		fmt.Fprintf(w, "sample (%d row(s) requested):\n", flagDiscoverSample)
+		if err := writeFlatTable(w, sampleRes.Columns, sampleRes.Rows, human, sampleRes.RowCount); err != nil {
+			return err
+		}
+	}
+	return nil
 }
