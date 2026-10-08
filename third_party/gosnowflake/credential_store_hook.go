@@ -17,6 +17,22 @@ type CredentialStore interface {
 	Delete(kind, key string)
 }
 
+// defaultCredentialsStorage is the OS-default manager the driver picked at
+// init (login keychain on macOS, file cache on Linux), kept so ClearIDToken can
+// reach it even after SetCredentialStore has replaced credentialsStorage.
+var defaultCredentialsStorage = credentialsStorage
+
+// ClearIDToken asks the OS-default credential storage (the macOS login
+// keychain, Linux's file cache) to delete the cached SSO ID token for host and
+// user. The driver does not report whether an entry existed, so this cannot
+// say whether anything was removed. Empty host or user is a no-op.
+func ClearIDToken(host, user string) {
+	if host == "" || user == "" {
+		return
+	}
+	defaultCredentialsStorage.deleteCredential(newIDTokenSpec(host, user))
+}
+
 // SetCredentialStore replaces the driver's credential storage. Call it before
 // opening any connection. A nil store is ignored.
 func SetCredentialStore(store CredentialStore) {

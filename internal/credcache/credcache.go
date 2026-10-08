@@ -15,8 +15,9 @@
 // Security posture: the token sits in a plaintext JSON file (dir 0700, file
 // 0600). That stops other users, not other processes running as you. Only the
 // ID token is ever persisted (MFA and OAuth tokens that the driver offers are
-// dropped), entries older than MaxAge are ignored, and symlinks are refused
-// for the file, the temp file and the directory. Token values are never
+// dropped), entries older than MaxAge are ignored, symlinks are refused for
+// the file, the temp file and the directory, and a directory or file owned by
+// another uid is never used or chmod-ed. Token values are never
 // logged or put in error messages.
 package credcache
 
@@ -40,7 +41,9 @@ const (
 	// wins over config.toml's credential_store.
 	EnvStore = "SNOWSTORM_CREDENTIAL_STORE"
 
-	// EnvDir overrides the directory holding the cache file.
+	// EnvDir overrides the parent of the cache directory: it must be an
+	// absolute path, and a "snowstorm" subdirectory is always appended so the
+	// store only ever chmods a directory it owns.
 	EnvDir = "SNOWSTORM_CREDENTIAL_CACHE_DIR"
 
 	// ModeFile and ModeKeychain are the valid credential_store values.
@@ -91,12 +94,17 @@ var _ gosnowflake.CredentialStore = (*Store)(nil)
 // the first Set.
 func New(dir string) *Store { return &Store{dir: dir} }
 
-// DefaultDir returns the directory for the cache file: $SNOWSTORM_CREDENTIAL_CACHE_DIR
-// if set, else <user cache dir>/snowstorm (~/Library/Caches/snowstorm on
-// macOS). The default is outside any home-directory sync or backup tree.
+// DefaultDir returns the directory for the cache file:
+// $SNOWSTORM_CREDENTIAL_CACHE_DIR/snowstorm if the override is set (it must be
+// absolute), else <user cache dir>/snowstorm (~/Library/Caches/snowstorm on
+// macOS). The user cache dir is where tools put regenerable data; whether a
+// given backup or sync tool skips it is up to that tool.
 func DefaultDir() (string, error) {
 	if d := os.Getenv(EnvDir); d != "" {
-		return d, nil
+		if !filepath.IsAbs(d) {
+			return "", fmt.Errorf("credcache: %s must be an absolute path", EnvDir)
+		}
+		return filepath.Join(d, dirName), nil
 	}
 	base, err := os.UserCacheDir()
 	if err != nil {
@@ -139,14 +147,67 @@ func Clear() error {
 	return New(dir).Clear()
 }
 
-// Clear deletes this store's cache file.
+// Clear deletes this store's cache file and any orphaned temp files. A
+// missing directory or file is not an error; a symlinked or foreign-owned
+// directory is refused (nothing is touched).
 func (s *Store) Clear() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	state, err := s.dirState()
+	if err != nil {
+		return err
+	}
+	if state == dirMissing {
+		return nil
+	}
+	s.cleanTemps(0)
 	if err := os.Remove(s.path()); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return errors.New("credcache: remove cache file failed")
 	}
 	return nil
+}
+
+type dirStatus int
+
+const (
+	dirMissing dirStatus = iota
+	dirOK
+)
+
+// dirState Lstat-checks the cache directory: missing, or a real directory
+// owned by us. A symlink, non-directory or foreign-owned directory is an
+// error, so no operation ever acts through or on one.
+func (s *Store) dirState() (dirStatus, error) {
+	di, err := os.Lstat(s.dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return dirMissing, nil
+	}
+	if err != nil {
+		return dirMissing, errors.New("credcache: cannot stat cache dir")
+	}
+	if !di.IsDir() { // Lstat: a symlink reports ModeSymlink, not a dir
+		return dirMissing, errors.New("credcache: cache dir is not a real directory")
+	}
+	if !ownedByUs(di) {
+		return dirMissing, errors.New("credcache: cache dir is owned by another user")
+	}
+	return dirOK, nil
+}
+
+// cleanTemps removes orphaned temp files (regular files only, never links)
+// older than minAge.
+func (s *Store) cleanTemps(minAge time.Duration) {
+	matches, _ := filepath.Glob(filepath.Join(s.dir, fileName+".tmp-*"))
+	for _, m := range matches {
+		fi, err := os.Lstat(m)
+		if err != nil || !fi.Mode().IsRegular() {
+			continue
+		}
+		if minAge > 0 && now().Sub(fi.ModTime()) < minAge {
+			continue
+		}
+		_ = os.Remove(m)
+	}
 }
 
 func (s *Store) path() string { return filepath.Join(s.dir, fileName) }
@@ -186,9 +247,12 @@ func (s *Store) Delete(kind, key string) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if state, err := s.dirState(); err != nil || state != dirOK {
+		return
+	}
 	tokens, ok := s.read()
 	if !ok {
-		if _, err := os.Lstat(s.path()); err == nil {
+		if fi, err := os.Lstat(s.path()); err == nil && fi.Mode().IsRegular() {
 			_ = os.Remove(s.path())
 		}
 		return
@@ -214,11 +278,11 @@ type fileData struct {
 func (s *Store) read() (tokens map[string]entry, ok bool) {
 	tokens = map[string]entry{}
 	p := s.path()
-	if di, err := os.Lstat(s.dir); err != nil || !di.IsDir() {
+	if state, err := s.dirState(); err != nil || state != dirOK {
 		return tokens, false
 	}
 	info, err := os.Lstat(p) // Lstat: a symlink is never regular
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 {
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 || !ownedByUs(info) {
 		return tokens, false
 	}
 	raw, err := os.ReadFile(p)
@@ -239,21 +303,24 @@ func (s *Store) read() (tokens map[string]entry, ok bool) {
 }
 
 func (s *Store) write(tokens map[string]entry) error {
-	// Refuse a symlinked directory or file; never follow either.
-	if di, err := os.Lstat(s.dir); err == nil && di.Mode()&os.ModeSymlink != 0 {
-		return errors.New("credcache: cache dir is a symlink")
-	}
-	if err := os.MkdirAll(s.dir, 0o700); err != nil {
+	// Refuse a symlinked or foreign-owned directory; never follow or chmod it.
+	state, err := s.dirState()
+	if err != nil {
 		return err
 	}
-	di, err := os.Lstat(s.dir)
-	if err != nil || !di.IsDir() {
-		return errors.New("credcache: cache dir is not a directory")
+	if state == dirMissing {
+		if err := os.MkdirAll(s.dir, 0o700); err != nil {
+			return err
+		}
+		if state, err = s.dirState(); err != nil || state != dirOK {
+			return errors.New("credcache: cache dir is not usable")
+		}
 	}
-	// MkdirAll leaves an existing directory's mode alone; tighten it.
+	// We own this directory (checked above); make sure it is private.
 	if err := os.Chmod(s.dir, 0o700); err != nil {
 		return err
 	}
+	s.cleanTemps(time.Minute)
 	if fi, err := os.Lstat(s.path()); err == nil && !fi.Mode().IsRegular() {
 		return errors.New("credcache: cache file is not a regular file")
 	}

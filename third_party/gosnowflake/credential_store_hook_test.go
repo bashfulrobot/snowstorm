@@ -45,3 +45,23 @@ func TestSetCredentialStoreRoutesDriverCalls(t *testing.T) {
 		t.Fatalf("store called despite key build failure: %v", r.calls)
 	}
 }
+
+func TestClearIDTokenUsesDefaultStorageEvenWhenHooked(t *testing.T) {
+	orig, origDefault := credentialsStorage, defaultCredentialsStorage
+	defer func() { credentialsStorage, defaultCredentialsStorage = orig, origDefault }()
+
+	def := &recordingStore{}
+	defaultCredentialsStorage = &hookedSecureStorageManager{store: def}
+	hooked := &recordingStore{}
+	SetCredentialStore(hooked)
+
+	ClearIDToken("host.example", "user")
+	ClearIDToken("", "user") // no-op
+	ClearIDToken("host.example", "")
+	if len(def.calls) != 1 || def.calls[0] != "del:ID_TOKEN" {
+		t.Fatalf("default store calls = %v", def.calls)
+	}
+	if len(hooked.calls) != 0 {
+		t.Fatalf("hooked store touched by ClearIDToken: %v", hooked.calls)
+	}
+}

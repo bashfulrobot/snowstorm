@@ -23,7 +23,7 @@
 
           src = ./.;
 
-          vendorHash = "sha256-P5pkxj8K4Ff+P1ir1hf03Xsr033ZCWucIwAcSS3TSxU=";
+          vendorHash = "sha256-o7NNldPYQdF+yCNmftpgTzHUnqspuQWmksAC9In7dZg=";
 
           meta = with pkgs.lib; {
             description = "Snowflake data-access CLI: run queries, get structured JSON back";

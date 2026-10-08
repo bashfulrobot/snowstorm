@@ -64,23 +64,45 @@ set, that's a policy question for your Snowflake account admin, not a snowstorm 
 
 File cache details:
 
-- Location: `~/Library/Caches/snowstorm/credential_cache_v1.json` (the user
-  cache dir, never inside your home sync or backup trees; override the
-  directory with `SNOWSTORM_CREDENTIAL_CACHE_DIR`). Directory 0700, file 0600,
-  atomic writes with an exclusive temp file. Symlinks (file, temp file,
-  directory) are refused, never followed.
+- Location: `~/Library/Caches/snowstorm/credential_cache_v1.json`, in the user
+  cache dir where tools keep regenerable data. That is under your home
+  directory; whether a backup or sync tool skips `~/Library/Caches` is up to
+  that tool, so exclude it yourself if it matters. Directory 0700, file 0600,
+  atomic writes with an exclusive (`O_EXCL`) temp file; orphaned temp files are
+  cleaned up. Symlinks (file, temp file, directory) are refused, and a
+  directory or file owned by another user is never used or chmod-ed.
+- `SNOWSTORM_CREDENTIAL_CACHE_DIR=/abs/path` moves the cache: it must be
+  absolute, and snowstorm always appends its own `snowstorm` subdirectory
+  (`/abs/path/snowstorm/`) so it only ever manages a directory it owns.
 - Only the short-lived SSO ID token is stored. MFA and OAuth tokens the driver
   offers are not persisted. The driver passes no token lifetime, so each entry
   records its write time and anything older than 24 hours is ignored (the
   Snowflake server-side expiry still applies on top).
 - A failed login (for example a rejected or expired token, error 390195)
   makes the driver delete the token through the store.
-- `snowstorm logout` deletes the cache file (no Snowflake call).
+- `snowstorm logout` deletes the locally cached token (no Snowflake call; the
+  server-side session is not revoked). In file mode it removes the cache file
+  and also asks the login keychain to drop a stale pre-upgrade item. In keychain
+  mode, or on Linux/Windows, it says where the token lives and asks the
+  driver's own storage to delete the token for the resolved connection (the
+  driver does not report whether one existed; a keychain delete may prompt).
 - Security tradeoff: it is a plaintext token. The 0600 mode stops other users,
   not other processes running as you; the keychain would prompt before handing
   the token to such a process, this does not. A token left in the keychain by
   earlier runs is not read or removed in file mode; delete it in Keychain
   Access if you want it gone.
+
+### Checking the vendored driver
+
+`third_party/gosnowflake` must stay upstream v2.1.0 minus documented deletions
+plus three added files (see `third_party/gosnowflake/SNOWSTORM_PATCH.md`). There
+is no CI workflow in this repo, so run these by hand before merging changes
+that touch it:
+
+```sh
+scripts/verify-vendored-gosnowflake.sh
+(cd third_party/gosnowflake && go test -run 'SetCredentialStore|ClearIDToken' .)
+```
 
 ## Usage
 

@@ -294,8 +294,14 @@ func TestEmptyKeyOrValueIgnored(t *testing.T) {
 
 func TestDefaultDir(t *testing.T) {
 	t.Setenv(EnvDir, "/custom/dir")
-	if got, err := DefaultDir(); err != nil || got != "/custom/dir" {
-		t.Fatalf("override: got %q, %v", got, err)
+	if got, err := DefaultDir(); err != nil || got != "/custom/dir/snowstorm" {
+		t.Fatalf("override: got %q, %v (want the snowstorm leaf appended)", got, err)
+	}
+	for _, rel := range []string{"relative/dir", ".", "~/x"} {
+		t.Setenv(EnvDir, rel)
+		if got, err := DefaultDir(); err == nil {
+			t.Fatalf("relative override %q accepted: %q", rel, got)
+		}
 	}
 	t.Setenv(EnvDir, "")
 	got, err := DefaultDir()
@@ -356,5 +362,114 @@ func TestInstallSelection(t *testing.T) {
 		if (err != nil) != c.wantErr || called != c.want {
 			t.Errorf("install(%s,%q): called=%v err=%v", c.goos, c.mode, called, err)
 		}
+	}
+}
+
+func TestRefusesForeignOwnedDir(t *testing.T) {
+	orig := ownedByUs
+	defer func() { ownedByUs = orig }()
+
+	dir := filepath.Join(t.TempDir(), "cache")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ownedByUs = func(os.FileInfo) bool { return false }
+	s := New(dir)
+	s.Set(KindIDToken, "k", "v")
+	s.Delete(KindIDToken, "k")
+	if err := s.Clear(); err == nil {
+		t.Error("Clear accepted a foreign-owned dir")
+	}
+	di, _ := os.Stat(dir)
+	if di.Mode().Perm() != 0o755 {
+		t.Errorf("foreign-owned dir was chmod-ed to %o", di.Mode().Perm())
+	}
+	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
+		t.Errorf("wrote into a foreign-owned dir: %d entries", len(entries))
+	}
+}
+
+func TestIgnoresForeignOwnedFile(t *testing.T) {
+	orig := ownedByUs
+	defer func() { ownedByUs = orig }()
+
+	s := newTestStore(t)
+	s.Set(KindIDToken, "k", "v")
+	ownedByUs = func(fi os.FileInfo) bool { return fi.IsDir() } // dir ours, file not
+	if got := s.Get(KindIDToken, "k"); got != "" {
+		t.Fatalf("read a foreign-owned cache file: %q", got)
+	}
+}
+
+func TestClearRefusesSymlinkedDir(t *testing.T) {
+	real := t.TempDir()
+	victim := filepath.Join(real, fileName)
+	if err := os.WriteFile(victim, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skip("symlinks unsupported:", err)
+	}
+	s := New(link)
+	if err := s.Clear(); err == nil {
+		t.Error("Clear followed a symlinked dir")
+	}
+	s.Delete(KindIDToken, "k")
+	if b, err := os.ReadFile(victim); err != nil || string(b) != "keep" {
+		t.Fatal("file behind a symlinked dir was touched")
+	}
+}
+
+func TestOrphanedTempFilesCleaned(t *testing.T) {
+	s := newTestStore(t)
+	s.Set(KindIDToken, "k", "v")
+	old := filepath.Join(s.dir, fileName+".tmp-old")
+	fresh := filepath.Join(s.dir, fileName+".tmp-fresh")
+	linkTmp := filepath.Join(s.dir, fileName+".tmp-link")
+	unrelated := filepath.Join(s.dir, "other.tmp-x")
+	for _, p := range []string{old, fresh, unrelated} {
+		if err := os.WriteFile(p, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	past := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(old, past, past); err != nil {
+		t.Fatal(err)
+	}
+	haveLink := os.Symlink(unrelated, linkTmp) == nil
+
+	// write(): removes old orphans, keeps recent ones (could be in flight).
+	s.Set(KindIDToken, "k2", "v2")
+	if _, err := os.Lstat(old); !os.IsNotExist(err) {
+		t.Error("old orphan survived write")
+	}
+	if _, err := os.Lstat(fresh); err != nil {
+		t.Error("in-flight temp file was removed by write")
+	}
+	if _, err := os.Lstat(unrelated); err != nil {
+		t.Error("unrelated file removed")
+	}
+	if haveLink {
+		if _, err := os.Lstat(linkTmp); err != nil {
+			t.Error("symlink temp entry was removed or followed by write")
+		}
+	}
+
+	// Clear(): removes all regular temp files and the cache file, never the
+	// symlink's target.
+	if err := s.Clear(); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{fresh, s.path()} {
+		if _, err := os.Lstat(p); !os.IsNotExist(err) {
+			t.Errorf("%s survived Clear", p)
+		}
+	}
+	if _, err := os.Lstat(unrelated); err != nil {
+		t.Error("Clear removed an unrelated file or a symlink target")
 	}
 }
