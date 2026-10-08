@@ -6,13 +6,15 @@ package gosnowflake
 // file adds an exported hook so a host program can supply its own store.
 
 // CredentialStore is a key/value store for the driver's cached tokens (SSO ID
-// token, MFA token, OAuth tokens). Keys are opaque hex digests built by the
-// driver from host, user and token type; values are the token strings.
-// Implementations must be safe for concurrent use and must not log values.
+// token, MFA token, OAuth tokens). kind is the token type ("ID_TOKEN",
+// "MFA_TOKEN", "OAUTH_ACCESS_TOKEN", "OAUTH_REFRESH_TOKEN"); key is an opaque
+// hex digest the driver builds from host, user and kind; values are the token
+// strings. The driver passes no lifetime information. Implementations must be
+// safe for concurrent use and must not log values.
 type CredentialStore interface {
-	Get(key string) string
-	Set(key, value string)
-	Delete(key string)
+	Get(kind, key string) string
+	Set(kind, key, value string)
+	Delete(kind, key string)
 }
 
 // SetCredentialStore replaces the driver's credential storage. Call it before
@@ -37,7 +39,7 @@ func (m *hookedSecureStorageManager) setCredential(tokenSpec *secureTokenSpec, v
 		logger.Warnf("cannot build token spec: %v", err)
 		return
 	}
-	m.store.Set(key, value)
+	m.store.Set(string(tokenSpec.tokenType), key, value)
 }
 
 func (m *hookedSecureStorageManager) getCredential(tokenSpec *secureTokenSpec) string {
@@ -46,7 +48,7 @@ func (m *hookedSecureStorageManager) getCredential(tokenSpec *secureTokenSpec) s
 		logger.Warnf("cannot build token spec: %v", err)
 		return ""
 	}
-	return m.store.Get(key)
+	return m.store.Get(string(tokenSpec.tokenType), key)
 }
 
 func (m *hookedSecureStorageManager) deleteCredential(tokenSpec *secureTokenSpec) {
@@ -55,5 +57,5 @@ func (m *hookedSecureStorageManager) deleteCredential(tokenSpec *secureTokenSpec
 		logger.Warnf("cannot build token spec: %v", err)
 		return
 	}
-	m.store.Delete(key)
+	m.store.Delete(string(tokenSpec.tokenType), key)
 }

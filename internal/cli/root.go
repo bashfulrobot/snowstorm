@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/bashfulrobot/snowstorm/internal/config"
+	"github.com/bashfulrobot/snowstorm/internal/credcache"
 	"github.com/spf13/cobra"
 )
 
@@ -16,6 +17,10 @@ var (
 	flagConnection string
 	flagHome       string
 	flagTimeout    time.Duration
+
+	// resolvedCredentialStore is set in PersistentPreRunE from
+	// $SNOWSTORM_CREDENTIAL_STORE > config.toml's credential_store > keychain.
+	resolvedCredentialStore string
 )
 
 // envConnectionName is the env var gosnowflake's own connections.toml
@@ -42,7 +47,11 @@ every invocation; explicit flags always win. All fields are optional:
   connection = "kong-revops"
   format     = "table"
   human      = true
-  query_dir  = "/custom/path/to/queries"`,
+  query_dir  = "/custom/path/to/queries"
+
+It can also set credential_store = "file" (macOS only; default "keychain",
+overridden by $SNOWSTORM_CREDENTIAL_STORE) to cache the SSO token in a 0600
+file instead of the login keychain; see README.md.`,
 	SilenceUsage: true,
 	// SilenceErrors: cobra's own error printer is turned off tool-wide so
 	// PrintError (errstyle.go) is the only thing that ever writes a command
@@ -64,7 +73,8 @@ every invocation; explicit flags always win. All fields are optional:
 			os.Getenv(envConnectionName),
 			cfg.Connection,
 		)
-		return nil
+		resolvedCredentialStore, err = credcache.Resolve(os.Getenv(credcache.EnvStore), cfg.CredentialStore)
+		return err
 	},
 }
 

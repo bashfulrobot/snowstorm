@@ -73,3 +73,17 @@ func TestLoadFromPartial(t *testing.T) {
 		t.Fatalf("partial file: got %+v, want %+v", got, want)
 	}
 }
+
+func TestLoadFromCredentialStore(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(path, []byte("credential_store = \"file\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadFrom(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.CredentialStore != "file" {
+		t.Fatalf("CredentialStore = %q", cfg.CredentialStore)
+	}
+}

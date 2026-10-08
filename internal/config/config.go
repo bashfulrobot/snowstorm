@@ -21,6 +21,11 @@ type Config struct {
 	Format     string `toml:"format"`
 	Human      bool   `toml:"human"`
 	QueryDir   string `toml:"query_dir"`
+
+	// CredentialStore is "file" to cache the SSO token in a file instead of
+	// the macOS login keychain; "" or "keychain" keeps the driver default.
+	// $SNOWSTORM_CREDENTIAL_STORE outranks it.
+	CredentialStore string `toml:"credential_store"`
 }
 
 // configRelPath is where the config file lives under the user's home
