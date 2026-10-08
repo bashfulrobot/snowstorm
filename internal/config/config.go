@@ -22,8 +22,8 @@ type Config struct {
 	Human      bool   `toml:"human"`
 	QueryDir   string `toml:"query_dir"`
 
-	// CredentialStore is "file" to cache the SSO token in a file instead of
-	// the macOS login keychain; "" or "keychain" keeps the driver default.
+	// CredentialStore is "keychain" to opt out of the default macOS file
+	// cache and use the login keychain; "" or "file" keeps the file cache.
 	// $SNOWSTORM_CREDENTIAL_STORE outranks it.
 	CredentialStore string `toml:"credential_store"`
 }

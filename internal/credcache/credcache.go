@@ -1,4 +1,4 @@
-// Package credcache is an opt-in, file-backed store for gosnowflake's cached
+// Package credcache is a file-backed store for gosnowflake's cached
 // SSO ID token (authenticator = "externalbrowser").
 //
 // Why it exists: on macOS gosnowflake keeps the ID token in the login keychain
@@ -6,11 +6,11 @@
 // the item whenever a login fails, so "Always Allow" never sticks and the user
 // is prompted for the keychain password over and over. The driver has no
 // switch for this, so snowstorm injects this store through the
-// SetCredentialStore hook in third_party/gosnowflake. It is OFF by default:
-// the keychain stays the default and the file store is enabled with
-// credential_store = "file" in ~/.snowstorm/config.toml or
-// SNOWSTORM_CREDENTIAL_STORE=file (env wins). On Linux the driver already uses
-// its own file cache, so nothing is installed there.
+// SetCredentialStore hook in third_party/gosnowflake. It is the DEFAULT on
+// macOS; credential_store = "keychain" in ~/.snowstorm/config.toml or
+// SNOWSTORM_CREDENTIAL_STORE=keychain (env wins) opts back into the driver's
+// login-keychain storage. On Linux the driver already uses its own file
+// cache and on Windows its Credential Manager, so nothing is installed there.
 //
 // Security posture: the token sits in a plaintext JSON file (dir 0700, file
 // 0600). That stops other users, not other processes running as you. Only the
@@ -36,7 +36,7 @@ import (
 )
 
 const (
-	// EnvStore selects the backend: "file" or "keychain" (the default). It
+	// EnvStore selects the backend: "file" (the default) or "keychain". It
 	// wins over config.toml's credential_store.
 	EnvStore = "SNOWSTORM_CREDENTIAL_STORE"
 
@@ -62,7 +62,7 @@ const (
 var now = time.Now
 
 // Resolve picks the credential store mode: the env value if set, else the
-// config.toml value, else the default (keychain). Unknown values are errors.
+// config.toml value, else the default (file). Unknown values are errors.
 func Resolve(envValue, configValue string) (string, error) {
 	mode, src := configValue, "credential_store"
 	if envValue != "" {
@@ -70,7 +70,7 @@ func Resolve(envValue, configValue string) (string, error) {
 	}
 	switch mode {
 	case "":
-		return ModeKeychain, nil
+		return ModeFile, nil
 	case ModeFile, ModeKeychain:
 		return mode, nil
 	}
@@ -105,16 +105,17 @@ func DefaultDir() (string, error) {
 	return filepath.Join(base, dirName), nil
 }
 
-// Install applies the already-resolved mode (see Resolve). Only ModeFile on
-// macOS replaces the driver's storage; everywhere else the driver default
-// stays (login keychain on macOS, its own file cache on Linux, Credential
-// Manager on Windows).
+// Install applies the mode from Resolve ("" means the default, file). Only
+// ModeFile on macOS replaces the driver's storage; everywhere else the driver
+// default stays (login keychain when opted out on macOS, its own file cache
+// on Linux, Credential Manager on Windows).
 func Install(mode string) error {
 	return install(runtime.GOOS, mode, gosnowflake.SetCredentialStore)
 }
 
 func install(goos, mode string, set func(gosnowflake.CredentialStore)) error {
-	if _, err := Resolve(mode, ""); err != nil {
+	mode, err := Resolve(mode, "")
+	if err != nil {
 		return err
 	}
 	if goos != "darwin" || mode != ModeFile {

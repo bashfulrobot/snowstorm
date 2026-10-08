@@ -46,20 +46,21 @@ set, that's a policy question for your Snowflake account admin, not a snowstorm 
 
 ### Where the cached token lives
 
-- **Linux:** gosnowflake keeps it in a plain file (0600, owned by you) under
-  `$SF_TEMPORARY_CREDENTIAL_CACHE_DIR`, `$XDG_CACHE_DIR/snowflake`, or
-  `~/.cache/snowflake`. No keyring daemon needed.
-- **macOS, default:** the login keychain. gosnowflake creates that item with an
-  empty trusted-app list and recreates it after every expired login, so "Always
-  Allow" never sticks and you get a keychain password prompt over and over.
-- **macOS, opt-in file cache:** snowstorm ships a patched copy of the driver
-  (`third_party/gosnowflake`) so you can keep the token in a file instead.
-  Enable it with either of:
-  - `credential_store = "file"` in `~/.snowstorm/config.toml`
-  - `SNOWSTORM_CREDENTIAL_STORE=file` in the environment
-
-  The env var wins over config.toml; `keychain` is the other valid value (and
-  the default); anything else is an error. `connections.toml` is not touched.
+- **macOS (default): a file cache.** gosnowflake would use the login keychain,
+  but it creates that item with an empty trusted-app list and recreates it
+  after every expired login, so "Always Allow" never sticks and you get a
+  keychain password prompt over and over. snowstorm ships a patched copy of the
+  driver (`third_party/gosnowflake`) and stores the token in a file instead.
+  **This is a plaintext token file and it is on by default.**
+- **Opt out (back to the keychain):** `credential_store = "keychain"` in
+  `~/.snowstorm/config.toml`, or `SNOWSTORM_CREDENTIAL_STORE=keychain` in the
+  environment. The env var wins over config.toml; `file` is the other valid
+  value (and the default); anything else is an error. `connections.toml` is not
+  touched.
+- **Linux:** unchanged. gosnowflake keeps the token in its own plain file
+  (0600, owned by you) under `$SF_TEMPORARY_CREDENTIAL_CACHE_DIR`,
+  `$XDG_CACHE_DIR/snowflake`, or `~/.cache/snowflake`.
+- **Windows:** unchanged (Credential Manager).
 
 File cache details:
 
@@ -76,9 +77,10 @@ File cache details:
   makes the driver delete the token through the store.
 - `snowstorm logout` deletes the cache file (no Snowflake call).
 - Security tradeoff: it is a plaintext token. The 0600 mode stops other users,
-  not other processes running as you, which the keychain would also prompt for.
-  A token left in the keychain by earlier runs is not read or removed in file
-  mode; delete it in Keychain Access if you want it gone.
+  not other processes running as you; the keychain would prompt before handing
+  the token to such a process, this does not. A token left in the keychain by
+  earlier runs is not read or removed in file mode; delete it in Keychain
+  Access if you want it gone.
 
 ## Usage
 
@@ -166,7 +168,7 @@ connection = "kong-revops"
 format     = "table"
 human      = true
 query_dir  = "/custom/path/to/queries"
-credential_store = "file"   # macOS only; default "keychain" (see above)
+# credential_store = "keychain"   # macOS: opt out of the default file token cache (see above)
 ```
 
 ## Global flags

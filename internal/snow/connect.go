@@ -34,7 +34,7 @@ type Options struct {
 	Home string
 
 	// CredentialStore is the resolved credential store mode ("file" or
-	// "keychain"; empty means keychain). See internal/credcache.
+	// "keychain"; empty means the default, file). See internal/credcache.
 	CredentialStore string
 
 	// PingTimeout bounds the initial connectivity check in Connect.
@@ -60,13 +60,13 @@ type Options struct {
 // client-side.
 //
 // Where the cached token lives: on Linux gosnowflake itself uses a plain file
-// cache (~/.cache/snowflake). On macOS it uses the login keychain, which
+// cache (~/.cache/snowflake). On macOS it would use the login keychain, which
 // re-prompts for the keychain password because the driver creates the item
 // with an empty trusted-app list and recreates it on every expired login.
-// Setting credential_store = "file" (config.toml) or
-// SNOWSTORM_CREDENTIAL_STORE=file opts macOS into a 0600 file store instead
-// (internal/credcache, via the hook in third_party/gosnowflake); the keychain
-// stays the default.
+// So on macOS Connect installs a 0600 file store by default
+// (internal/credcache, via the hook in third_party/gosnowflake);
+// credential_store = "keychain" (config.toml) or
+// SNOWSTORM_CREDENTIAL_STORE=keychain opts back into the keychain.
 func Connect(ctx context.Context, opts Options) (*sql.DB, error) {
 	if err := credcache.Install(opts.CredentialStore); err != nil {
 		return nil, fmt.Errorf("snow: %w", err)

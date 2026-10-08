@@ -19,7 +19,7 @@ var (
 	flagTimeout    time.Duration
 
 	// resolvedCredentialStore is set in PersistentPreRunE from
-	// $SNOWSTORM_CREDENTIAL_STORE > config.toml's credential_store > keychain.
+	// $SNOWSTORM_CREDENTIAL_STORE > config.toml's credential_store > file.
 	resolvedCredentialStore string
 )
 
@@ -49,9 +49,10 @@ every invocation; explicit flags always win. All fields are optional:
   human      = true
   query_dir  = "/custom/path/to/queries"
 
-It can also set credential_store = "file" (macOS only; default "keychain",
-overridden by $SNOWSTORM_CREDENTIAL_STORE) to cache the SSO token in a 0600
-file instead of the login keychain; see README.md.`,
+On macOS the SSO token is cached in a 0600 file by default instead of the
+login keychain (which re-prompts constantly). credential_store = "keychain"
+(or $SNOWSTORM_CREDENTIAL_STORE=keychain, which wins) opts back into the
+keychain; see README.md.`,
 	SilenceUsage: true,
 	// SilenceErrors: cobra's own error printer is turned off tool-wide so
 	// PrintError (errstyle.go) is the only thing that ever writes a command

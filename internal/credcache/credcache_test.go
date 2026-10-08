@@ -312,12 +312,13 @@ func TestResolve(t *testing.T) {
 		env, cfg, want string
 		wantErr        bool
 	}{
-		{"", "", ModeKeychain, false},
+		{"", "", ModeFile, false}, // default is the file cache
 		{"", "file", ModeFile, false},
 		{"", "keychain", ModeKeychain, false},
 		{"file", "", ModeFile, false},
 		{"keychain", "file", ModeKeychain, false}, // env wins over config
 		{"file", "keychain", ModeFile, false},
+		{"", "keychain", ModeKeychain, false},
 		{"bogus", "", "", true},
 		{"", "bogus", "", true},
 		{"file", "bogus", ModeFile, false}, // env wins, config not consulted
@@ -339,11 +340,14 @@ func TestInstallSelection(t *testing.T) {
 		want       bool
 		wantErr    bool
 	}{
+		{"darwin", "", true, false}, // default on macOS is the file cache
 		{"darwin", ModeFile, true, false},
-		{"darwin", ModeKeychain, false, false},
-		{"darwin", "", false, false}, // default stays the keychain
+		{"darwin", ModeKeychain, false, false}, // opt-out
 		{"darwin", "bogus", false, true},
+		{"linux", "", false, false}, // driver's own file cache
 		{"linux", ModeFile, false, false},
+		{"linux", "bogus", false, true},
+		{"windows", "", false, false},
 		{"windows", ModeFile, false, false},
 	}
 	for _, c := range cases {

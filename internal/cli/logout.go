@@ -12,7 +12,7 @@ var logoutCmd = &cobra.Command{
 	Use:   "logout",
 	Short: "Delete the file-cached SSO token",
 	Long: `logout deletes snowstorm's file-based token cache
-(credential_store = "file"; ~/Library/Caches/snowstorm on macOS), so the next
+(the macOS default; ~/Library/Caches/snowstorm), so the next
 command opens the browser again. It does not contact Snowflake and does not
 touch the login keychain or connections.toml.`,
 	Args: cobra.NoArgs,
