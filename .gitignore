@@ -30,3 +30,8 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# The patched gosnowflake copy embeds its minicore libraries (go:embed)
+!/third_party/gosnowflake/*.so
+!/third_party/gosnowflake/*.dll
+!/third_party/gosnowflake/*.dylib

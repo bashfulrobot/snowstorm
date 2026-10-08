@@ -23,10 +23,7 @@ schema = "SOME_SCHEMA"
 # Optional: caches the SSO id token so externalbrowser doesn't reopen a
 # browser on every run -- reused automatically as long as it's still valid.
 # Auto-enabled on Windows/macOS; on Linux it defaults OFF and needs this
-# explicit flag. No keyring/Secret Service daemon required on Linux -- the
-# driver caches it in a plain file (0600, owned by you) under
-# $SF_TEMPORARY_CREDENTIAL_CACHE_DIR, $XDG_CACHE_DIR/snowflake, or
-# ~/.cache/snowflake by default.
+# explicit flag. See "Where the cached token lives" below.
 client_store_temporary_credential = true
 
 # Same idea, for authenticator = "username_password_mfa": caches the MFA
@@ -46,6 +43,33 @@ token stays valid is entirely up to your Snowflake account's authentication/sess
 policies (server-side) -- snowstorm and gosnowflake have no client-side setting that
 lengthens it. If you're still re-authenticating more often than expected with the flag
 set, that's a policy question for your Snowflake account admin, not a snowstorm one.
+
+### Where the cached token lives
+
+- **Linux:** gosnowflake keeps it in a plain file (0600, owned by you) under
+  `$SF_TEMPORARY_CREDENTIAL_CACHE_DIR`, `$XDG_CACHE_DIR/snowflake`, or
+  `~/.cache/snowflake`. No keyring daemon needed.
+- **macOS:** gosnowflake would use the login keychain, but it creates the item
+  with an empty trusted-app list and recreates it after every expired login, so
+  "Always Allow" never sticks and you get a keychain password prompt over and
+  over. snowstorm therefore ships a patched copy of the driver
+  (`third_party/gosnowflake`) and stores the token in a file instead:
+  `~/Library/Caches/snowstorm/credential_cache_v1.json` (directory 0700, file
+  0600). This is a plaintext token file, the same posture as the Linux cache.
+  `connections.toml` is not touched.
+
+Environment variables (macOS):
+
+- `SNOWSTORM_CREDENTIAL_STORE=keychain` -- opt out and use the driver's
+  login-keychain storage again. Default is `file`.
+- `SNOWSTORM_CREDENTIAL_CACHE_DIR=/some/dir` -- keep the cache file in this
+  directory instead (it is created with mode 0700).
+
+To forget the cached session, delete that file (or run
+`rm ~/Library/Caches/snowstorm/credential_cache_v1.json`); the next command
+opens the browser again. A token already sitting in the keychain from earlier
+versions is no longer read; remove the stale keychain item in Keychain Access if
+you want it gone.
 
 ## Usage
 

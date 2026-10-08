@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/bashfulrobot/snowstorm/internal/credcache"
 	_ "github.com/snowflakedb/gosnowflake/v2" // registers the "snowflake" database/sql driver
 )
 
@@ -49,12 +50,22 @@ type Options struct {
 // often than expected: client_store_temporary_credential (caches the SSO id
 // token for authenticator = "externalbrowser") and client_request_mfa_token
 // (same idea, for authenticator = "username_password_mfa"). Both default to
-// on for Windows/macOS but off for Linux (gosnowflake v2.1.0), and on Linux
-// need no keyring daemon -- just a plain file cache under
-// ~/.cache/snowflake (see README.md). Neither controls how long the cached
-// token stays valid; that's governed entirely by the Snowflake account's
-// server-side auth/session policies, not anything client-side.
+// on for Windows/macOS but off for Linux (gosnowflake v2.1.0). Neither
+// controls how long the cached token stays valid; that's governed entirely by
+// the Snowflake account's server-side auth/session policies, not anything
+// client-side.
+//
+// Where the cached token lives: on Linux gosnowflake itself uses a plain file
+// cache (~/.cache/snowflake). On macOS it would use the login keychain, which
+// re-prompts for the keychain password because the driver creates the item
+// with an empty trusted-app list and recreates it on every expired login. So
+// on macOS Connect installs a file store (internal/credcache, via the hook in
+// third_party/gosnowflake) under ~/Library/Caches/snowstorm instead; set
+// SNOWSTORM_CREDENTIAL_STORE=keychain to get the driver's keychain back.
 func Connect(ctx context.Context, opts Options) (*sql.DB, error) {
+	if err := credcache.Install(); err != nil {
+		return nil, fmt.Errorf("snow: %w", err)
+	}
 	if opts.ConnectionName != "" {
 		if err := os.Setenv(envConnectionName, opts.ConnectionName); err != nil {
 			return nil, fmt.Errorf("snow: set %s: %w", envConnectionName, err)
