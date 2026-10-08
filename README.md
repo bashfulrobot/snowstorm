@@ -50,7 +50,7 @@ set, that's a policy question for your Snowflake account admin, not a snowstorm 
   but it creates that item with an empty trusted-app list and recreates it
   after every expired login, so "Always Allow" never sticks and you get a
   keychain password prompt over and over. snowstorm ships a patched copy of the
-  driver (`third_party/gosnowflake`) and stores the token in a file instead.
+  driver (`internal/gosnowflake`) and stores the token in a file instead.
   **This is a plaintext token file and it is on by default.**
 - **Opt out (back to the keychain):** `credential_store = "keychain"` in
   `~/.snowstorm/config.toml`, or `SNOWSTORM_CREDENTIAL_STORE=keychain` in the
@@ -94,14 +94,15 @@ File cache details:
 
 ### Checking the vendored driver
 
-`third_party/gosnowflake` must stay upstream v2.1.0 minus documented deletions
-plus three added files (see `third_party/gosnowflake/SNOWSTORM_PATCH.md`). There
+`internal/gosnowflake` must stay upstream v2.1.0 minus documented deletions,
+with its import path prefix rewritten to this module, plus three added files (see `internal/gosnowflake/SNOWSTORM_PATCH.md`). The driver lives inside this module (not a `replace`d one) so
+`go install github.com/bashfulrobot/snowstorm@latest` works. There
 is no CI workflow in this repo, so run these by hand before merging changes
 that touch it:
 
 ```sh
 scripts/verify-vendored-gosnowflake.sh
-(cd third_party/gosnowflake && go test -run 'SetCredentialStore|ClearIDToken' .)
+go test ./internal/gosnowflake/ -run 'SetCredentialStore|ClearIDToken'
 ```
 
 ## Usage

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/snowflakedb/gosnowflake/v2"
+	"github.com/bashfulrobot/snowstorm/internal/gosnowflake"
 )
 
 func newTestStore(t *testing.T) *Store {

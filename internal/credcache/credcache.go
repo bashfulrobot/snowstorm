@@ -6,7 +6,7 @@
 // the item whenever a login fails, so "Always Allow" never sticks and the user
 // is prompted for the keychain password over and over. The driver has no
 // switch for this, so snowstorm injects this store through the
-// SetCredentialStore hook in third_party/gosnowflake. It is the DEFAULT on
+// SetCredentialStore hook in internal/gosnowflake. It is the DEFAULT on
 // macOS; credential_store = "keychain" in ~/.snowstorm/config.toml or
 // SNOWSTORM_CREDENTIAL_STORE=keychain (env wins) opts back into the driver's
 // login-keychain storage. On Linux the driver already uses its own file
@@ -33,7 +33,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/snowflakedb/gosnowflake/v2"
+	"github.com/bashfulrobot/snowstorm/internal/gosnowflake"
 )
 
 const (

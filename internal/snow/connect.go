@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/bashfulrobot/snowstorm/internal/credcache"
-	_ "github.com/snowflakedb/gosnowflake/v2" // registers the "snowflake" database/sql driver
+	_ "github.com/bashfulrobot/snowstorm/internal/gosnowflake" // registers the "snowflake" database/sql driver
 )
 
 // Env vars read by gosnowflake's internal connections.toml loader.
@@ -64,7 +64,7 @@ type Options struct {
 // re-prompts for the keychain password because the driver creates the item
 // with an empty trusted-app list and recreates it on every expired login.
 // So on macOS Connect installs a 0600 file store by default
-// (internal/credcache, via the hook in third_party/gosnowflake);
+// (internal/credcache, via the hook in internal/gosnowflake);
 // credential_store = "keychain" (config.toml) or
 // SNOWSTORM_CREDENTIAL_STORE=keychain opts back into the keychain.
 func Connect(ctx context.Context, opts Options) (*sql.DB, error) {

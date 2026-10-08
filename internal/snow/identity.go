@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/snowflakedb/gosnowflake/v2"
+	"github.com/bashfulrobot/snowstorm/internal/gosnowflake"
 )
 
 // tokenIdentity resolves the host and user gosnowflake keys the cached token
