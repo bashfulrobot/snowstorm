@@ -21,6 +21,11 @@ type Config struct {
 	Format     string `toml:"format"`
 	Human      bool   `toml:"human"`
 	QueryDir   string `toml:"query_dir"`
+
+	// CredentialStore is "keychain" to opt out of the default macOS file
+	// cache and use the login keychain; "" or "file" keeps the file cache.
+	// $SNOWSTORM_CREDENTIAL_STORE outranks it.
+	CredentialStore string `toml:"credential_store"`
 }
 
 // configRelPath is where the config file lives under the user's home
