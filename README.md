@@ -3,7 +3,7 @@
 Snowflake data-access CLI. Connects via a named connection from
 `~/.snowflake/connections.toml` and runs SQL. Output is tuned for a human
 at a terminal by default (a readable table, abbreviated numbers, an
-fzf-style picker for saved queries) -- pass `--format json` for the old
+prefix-match picker for saved queries) -- pass `--format json` for the old
 byte-for-byte machine-parseable output any script or agent should use.
 
 ## Setup
@@ -136,9 +136,10 @@ unaffected by `--human` or anything else here -- that's the path a script
 or agent should use.
 
 Running `snowstorm query` with no SQL, `--file`, or `--saved`, in a real
-terminal (both stdin and stdout), opens an fzf-style fuzzy picker over your
-saved queries instead of reading stdin -- type to filter, Enter runs the
-highlighted query, Ctrl-C/Esc exits cleanly with no output. A stderr-only
+terminal (both stdin and stdout), opens a picker over your
+saved queries instead of reading stdin. It lists nothing until you type, then
+shows queries whose name starts with the typed text (case-insensitive), so
+other customers' names stay off screen. Enter runs the highlighted query, Ctrl-C/Esc exits cleanly with no output. A stderr-only
 spinner shows while a `--format table` query runs. Command errors get a
 colorized `Error:` prefix on a real terminal.
 

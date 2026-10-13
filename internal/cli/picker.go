@@ -1,5 +1,5 @@
-// Interactive saved-query picker: an fzf-style fuzzy list shown by `snowstorm
-// query` (bare, at a real terminal) instead of falling through to stdin, so
+// Interactive saved-query picker: a prefix-match list, empty until the user
+// types, shown by `snowstorm query` (bare, at a real terminal) instead of falling through to stdin, so
 // a human running it with zero flags can browse and pick a saved query.
 //
 // This is entirely additive to the existing resolveSQL stdin path (query.go)
@@ -83,9 +83,10 @@ func resolveSQLOrPick(args []string) (sqlText string, cancelled bool, err error)
 }
 
 // queryItem adapts a savedQueryInfo into bubbles/list's Item+DefaultItem
-// interfaces: FilterValue is the text matchPrefix compares against (name
-// first, then description), Title/Description drive the two-line rendering
-// of list.NewDefaultDelegate().
+// interfaces: FilterValue is the text matchPrefix compares against (the name
+// followed by the description, so only a prefix of the name matches unless
+// the whole name is typed first), Title/Description drive the two-line
+// rendering of list.NewDefaultDelegate().
 type queryItem struct {
 	name        string
 	description string
@@ -95,8 +96,8 @@ func (i queryItem) FilterValue() string { return i.name + " " + i.description }
 func (i queryItem) Title() string       { return i.name }
 func (i queryItem) Description() string { return i.description }
 
-// matchPrefix returns the items whose FilterValue starts with term
-// (case-insensitive, whole pattern). An empty term matches nothing: the picker
+// matchPrefix returns the items whose FilterValue (name, then description)
+// starts with the whole term, case-insensitive. An empty term matches nothing: the picker
 // opens blank so a screen share never lists every customer's query name.
 func matchPrefix(items []list.Item, term string) []list.Item {
 	term = strings.ToLower(strings.TrimSpace(term))
@@ -110,6 +111,14 @@ func matchPrefix(items []list.Item, term string) []list.Item {
 		}
 	}
 	return out
+}
+
+// pickerChromeLines is the number of terminal lines View uses around the
+// list: leading blank, header, input, blank before the list.
+const pickerChromeLines = 4
+
+func listHeight(termHeight int) int {
+	return max(termHeight-pickerChromeLines, 0)
 }
 
 // pickerModel is the bubbletea model backing the saved-query picker: a text
@@ -131,7 +140,7 @@ func newPickerModel(items []savedQueryInfo) pickerModel {
 	}
 
 	const width, height = 80, 20
-	l := list.New(nil, list.NewDefaultDelegate(), width, height-3)
+	l := list.New(nil, list.NewDefaultDelegate(), width, listHeight(height))
 	l.SetShowTitle(false)
 	l.SetShowStatusBar(false)
 	l.SetShowHelp(false)
@@ -149,7 +158,7 @@ func (m pickerModel) Init() tea.Cmd { return textinput.Blink }
 func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.list.SetSize(msg.Width, msg.Height-3)
+		m.list.SetSize(msg.Width, listHeight(msg.Height))
 		return m, nil
 	case tea.KeyMsg:
 		switch msg.Type {
@@ -190,6 +199,11 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m pickerModel) View() string {
+	// The program runs inline, so the last frame stays in the terminal after
+	// exit. Render nothing once done so matched query names do not linger.
+	if m.chosen != "" || m.cancelled {
+		return ""
+	}
 	header := lipgloss.NewStyle().Bold(true).Render("Saved queries (type the start of a name, enter to run, esc/ctrl+c to cancel)")
 	body := "Type to search. Nothing is listed until you do."
 	if strings.TrimSpace(m.input.Value()) != "" {
