@@ -47,8 +47,10 @@ ACCOUNT/ACCOUNT_NAME is grouped instead of repeated on every row, in both
 --format table and JSON.
 
 When none of [SQL, --file, --saved] is given and both stdin and stdout are
-real terminals, an fzf-style fuzzy picker over --query-dir's saved queries
-opens instead of reading stdin; Enter runs the chosen query, Ctrl-C/Esc
+real terminals, a picker over --query-dir's saved queries opens instead of
+reading stdin. It lists nothing until you type, then shows the queries whose
+name starts with the typed text (case-insensitive), so a screen share never
+shows other customers' names. Enter runs the highlighted query, Ctrl-C/Esc
 exits cleanly with no output. Pass --skip-pick, or run non-interactively
 (piped stdin/stdout), to fall back to the old behavior of reading stdin.
 
