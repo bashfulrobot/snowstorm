@@ -1,6 +1,10 @@
 package cli
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/charmbracelet/bubbles/list"
+)
 
 func TestShouldShowPicker(t *testing.T) {
 	cases := []struct {
@@ -41,5 +45,60 @@ func TestQueryItemFilterAndDisplay(t *testing.T) {
 	}
 	if it.FilterValue() != "top_accounts top accounts by ARR" {
 		t.Errorf("FilterValue() = %q, want name+description", it.FilterValue())
+	}
+}
+
+func TestMatchPrefix(t *testing.T) {
+	items := []list.Item{
+		queryItem{name: "acme_usage", description: "Acme buy vs use"},
+		queryItem{name: "zillow_usage", description: "Zillow buy vs use"},
+		queryItem{name: "top_accounts", description: "top accounts by ARR"},
+	}
+	names := func(got []list.Item) []string {
+		var out []string
+		for _, it := range got {
+			out = append(out, it.(queryItem).name)
+		}
+		return out
+	}
+
+	cases := []struct {
+		term string
+		want []string
+	}{
+		{"", nil},
+		{"   ", nil},
+		{"ac", []string{"acme_usage"}},
+		{"ACME", []string{"acme_usage"}},
+		{"usage", nil},
+		{"cme", nil},
+		{"zillow_usage zillow", []string{"zillow_usage"}},
+		{"nope", nil},
+	}
+	for _, tc := range cases {
+		got := names(matchPrefix(items, tc.term))
+		if len(got) != len(tc.want) {
+			t.Fatalf("matchPrefix(%q) = %v, want %v", tc.term, got, tc.want)
+		}
+		for i := range got {
+			if got[i] != tc.want[i] {
+				t.Fatalf("matchPrefix(%q) = %v, want %v", tc.term, got, tc.want)
+			}
+		}
+	}
+}
+
+func TestPickerStartsEmptyAndFiltersOnType(t *testing.T) {
+	m := newPickerModel([]savedQueryInfo{
+		{Name: "acme_usage", Description: "Acme"},
+		{Name: "zillow_usage", Description: "Zillow"},
+	})
+	if n := len(m.list.Items()); n != 0 {
+		t.Fatalf("picker opened with %d items listed, want 0", n)
+	}
+	m.input.SetValue("zi")
+	m.list.SetItems(matchPrefix(m.all, m.input.Value()))
+	if n := len(m.list.Items()); n != 1 {
+		t.Fatalf("after typing %q got %d items, want 1", "zi", n)
 	}
 }

@@ -12,8 +12,10 @@ package cli
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"golang.org/x/term"
@@ -81,9 +83,9 @@ func resolveSQLOrPick(args []string) (sqlText string, cancelled bool, err error)
 }
 
 // queryItem adapts a savedQueryInfo into bubbles/list's Item+DefaultItem
-// interfaces: FilterValue feeds sahilm/fuzzy's subsequence matching (name
-// and description both searchable), Title/Description drive the two-line
-// rendering of list.NewDefaultDelegate().
+// interfaces: FilterValue is the text matchPrefix compares against (name
+// first, then description), Title/Description drive the two-line rendering
+// of list.NewDefaultDelegate().
 type queryItem struct {
 	name        string
 	description string
@@ -93,37 +95,61 @@ func (i queryItem) FilterValue() string { return i.name + " " + i.description }
 func (i queryItem) Title() string       { return i.name }
 func (i queryItem) Description() string { return i.description }
 
-// pickerModel is the bubbletea model backing the saved-query picker: mostly
-// a thin wrapper around bubbles/list.Model, with its own Enter/Esc/Ctrl-C
-// handling layered on top (list.Model has no notion of "the user is done
-// picking" on its own).
+// matchPrefix returns the items whose FilterValue starts with term
+// (case-insensitive, whole pattern). An empty term matches nothing: the picker
+// opens blank so a screen share never lists every customer's query name.
+func matchPrefix(items []list.Item, term string) []list.Item {
+	term = strings.ToLower(strings.TrimSpace(term))
+	if term == "" {
+		return nil
+	}
+	var out []list.Item
+	for _, it := range items {
+		if strings.HasPrefix(strings.ToLower(it.FilterValue()), term) {
+			out = append(out, it)
+		}
+	}
+	return out
+}
+
+// pickerModel is the bubbletea model backing the saved-query picker: a text
+// input plus a bubbles/list.Model that shows only the prefix matches for the
+// typed text. The list's built-in fuzzy filter is off because it lists every
+// item while the filter is empty.
 type pickerModel struct {
+	input     textinput.Model
 	list      list.Model
+	all       []list.Item
 	chosen    string
 	cancelled bool
 }
 
 func newPickerModel(items []savedQueryInfo) pickerModel {
-	listItems := make([]list.Item, len(items))
+	all := make([]list.Item, len(items))
 	for i, it := range items {
-		listItems[i] = queryItem{name: it.Name, description: it.Description}
+		all[i] = queryItem{name: it.Name, description: it.Description}
 	}
 
 	const width, height = 80, 20
-	l := list.New(listItems, list.NewDefaultDelegate(), width, height)
-	l.Title = "Saved queries (type to fuzzy-filter, enter to run, esc/ctrl+c to cancel)"
+	l := list.New(nil, list.NewDefaultDelegate(), width, height-3)
+	l.SetShowTitle(false)
 	l.SetShowStatusBar(false)
-	l.Styles.Title = lipgloss.NewStyle().Bold(true)
+	l.SetShowHelp(false)
+	l.SetFilteringEnabled(false)
 
-	return pickerModel{list: l}
+	in := textinput.New()
+	in.Prompt = "> "
+	in.Focus()
+
+	return pickerModel{input: in, list: l, all: all}
 }
 
-func (m pickerModel) Init() tea.Cmd { return nil }
+func (m pickerModel) Init() tea.Cmd { return textinput.Blink }
 
 func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.list.SetSize(msg.Width, msg.Height)
+		m.list.SetSize(msg.Width, msg.Height-3)
 		return m, nil
 	case tea.KeyMsg:
 		switch msg.Type {
@@ -131,25 +157,45 @@ func (m pickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cancelled = true
 			return m, tea.Quit
 		case tea.KeyEnter:
-			// Enter always runs the currently-highlighted item, whether or
-			// not the user has stopped typing a filter -- fzf-style, not
-			// "press enter once to accept the filter, again to select".
+			// Enter runs the highlighted match. With nothing typed there is
+			// nothing highlighted, so Enter is ignored rather than cancelling.
 			if it, ok := m.list.SelectedItem().(queryItem); ok {
 				m.chosen = it.name
-			} else {
-				m.cancelled = true
+				return m, tea.Quit
 			}
-			return m, tea.Quit
+			return m, nil
+		case tea.KeyUp, tea.KeyDown, tea.KeyPgUp, tea.KeyPgDown:
+			var cmd tea.Cmd
+			m.list, cmd = m.list.Update(msg)
+			return m, cmd
+		case tea.KeyCtrlP:
+			var cmd tea.Cmd
+			m.list, cmd = m.list.Update(tea.KeyMsg{Type: tea.KeyUp})
+			return m, cmd
+		case tea.KeyCtrlN:
+			var cmd tea.Cmd
+			m.list, cmd = m.list.Update(tea.KeyMsg{Type: tea.KeyDown})
+			return m, cmd
 		}
 	}
 
+	prev := m.input.Value()
 	var cmd tea.Cmd
-	m.list, cmd = m.list.Update(msg)
+	m.input, cmd = m.input.Update(msg)
+	if m.input.Value() != prev {
+		m.list.SetItems(matchPrefix(m.all, m.input.Value()))
+		m.list.ResetSelected()
+	}
 	return m, cmd
 }
 
 func (m pickerModel) View() string {
-	return "\n" + m.list.View()
+	header := lipgloss.NewStyle().Bold(true).Render("Saved queries (type the start of a name, enter to run, esc/ctrl+c to cancel)")
+	body := "Type to search. Nothing is listed until you do."
+	if strings.TrimSpace(m.input.Value()) != "" {
+		body = m.list.View()
+	}
+	return "\n" + header + "\n" + m.input.View() + "\n\n" + body
 }
 
 // pickSavedQuery runs the interactive picker over items and returns the
