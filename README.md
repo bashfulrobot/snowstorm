@@ -8,12 +8,8 @@ for scripts and agents.
 
 ## Quickstart
 
-Install a [release binary](docs/installation.md#release-binary) (macOS and Linux,
-amd64 and arm64), or with Go 1.26.5+:
-
-```sh
-go install github.com/bashfulrobot/snowstorm@latest
-```
+Install snowstorm for macOS or Linux. See [Installation](docs/installation.md)
+for the options: release binary, `go install`, Nix, or build from source.
 
 Add a connection to `~/.snowflake/connections.toml`:
 

@@ -1,8 +1,16 @@
 # Installation
 
-snowstorm is a single Go binary. Pick one method.
+snowstorm is a single Go binary. **Choose one** of the four options below.
+Each option is an alternative to the others, so do not run more than one.
 
-## Release binary
+| Option | Best for | Needs |
+| --- | --- | --- |
+| 1. Release binary | Most users | `tar`, `curl` or a browser |
+| 2. `go install` | Go developers | Go 1.26.5+ |
+| 3. Nix | Nix users | Nix with flakes |
+| 4. Build from source | Contributors | Go 1.26.5+, a clone |
+
+## Option 1: Release binary
 
 Download the archive for your OS and CPU from the
 [Releases page](https://github.com/bashfulrobot/snowstorm/releases), then:
@@ -10,7 +18,6 @@ Download the archive for your OS and CPU from the
 ```sh
 tar -xzf snowstorm_<version>_<os>_<arch>.tar.gz
 sudo mv snowstorm /usr/local/bin/
-snowstorm --help
 ```
 
 Archives exist for `darwin` and `linux`, each on `amd64` and `arm64`. A
@@ -19,7 +26,9 @@ Archives exist for `darwin` and `linux`, each on `amd64` and `arm64`. A
 On macOS, a downloaded binary may be quarantined. Clear it with
 `xattr -d com.apple.quarantine snowstorm`.
 
-## go install
+**OR**
+
+## Option 2: go install
 
 Needs Go 1.26.5 or newer (see `go.mod`).
 
@@ -30,7 +39,9 @@ go install github.com/bashfulrobot/snowstorm@latest
 The binary lands in `$(go env GOBIN)`, or `$(go env GOPATH)/bin` when `GOBIN`
 is unset. Put that directory on `PATH`.
 
-## Nix
+**OR**
+
+## Option 3: Nix
 
 The repo ships a flake with a `snowstorm` package and a dev shell.
 
@@ -45,7 +56,9 @@ nix profile install github:bashfulrobot/snowstorm
 To use it from another flake, add `github:bashfulrobot/snowstorm` as an input
 and reference `packages.<system>.default`.
 
-## Build from source
+**OR**
+
+## Option 4: Build from source
 
 ```sh
 git clone https://github.com/bashfulrobot/snowstorm
@@ -54,6 +67,8 @@ go build -o snowstorm .
 ```
 
 ## Verify
+
+After any option:
 
 ```sh
 snowstorm --help
