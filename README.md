@@ -35,6 +35,13 @@ snowstorm query -c my_connection "SELECT CURRENT_USER()"
 snowstorm query -c my_connection --format json "SELECT 1"   # for scripts
 ```
 
+Optional: let Claude Code drive snowstorm with the bundled skill.
+
+```
+/plugin marketplace add bashfulrobot/snowstorm
+/plugin install snowstorm@snowstorm
+```
+
 ## Docs
 
 - [Installation](docs/installation.md): release binary, go install, Nix, build from source
@@ -42,6 +49,7 @@ snowstorm query -c my_connection --format json "SELECT 1"   # for scripts
 - [Authentication](docs/authentication.md): login, token cache, logout, security tradeoffs
 - [Usage](docs/usage.md): commands, flags, output formats, picker, scripting
 - [Saved queries](docs/saved-queries.md): `.sql` and `.toml` queries
+- [Claude Code skill](docs/claude-skill.md): install the plugin so Claude can drive snowstorm
 - [Development](docs/development.md): build, test, vendored driver, releases
 
 ## License
