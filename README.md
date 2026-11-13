@@ -37,9 +37,10 @@ snowstorm query -c my_connection --format json "SELECT 1"   # for scripts
 
 Optional: let Claude Code drive snowstorm with the bundled skill.
 
-```
-/plugin marketplace add bashfulrobot/snowstorm
-/plugin install snowstorm@snowstorm
+```sh
+mkdir -p ~/.claude/skills/snowstorm
+curl -fsSL https://raw.githubusercontent.com/bashfulrobot/snowstorm/main/skills/snowstorm/SKILL.md \
+  -o ~/.claude/skills/snowstorm/SKILL.md
 ```
 
 ## Docs
@@ -49,7 +50,7 @@ Optional: let Claude Code drive snowstorm with the bundled skill.
 - [Authentication](docs/authentication.md): login, token cache, logout, security tradeoffs
 - [Usage](docs/usage.md): commands, flags, output formats, picker, scripting
 - [Saved queries](docs/saved-queries.md): `.sql` and `.toml` queries
-- [Claude Code skill](docs/claude-skill.md): install the plugin so Claude can drive snowstorm
+- [Claude Code skill](docs/claude-skill.md): install the skill so Claude can drive snowstorm
 - [Development](docs/development.md): build, test, vendored driver, releases
 
 ## License
