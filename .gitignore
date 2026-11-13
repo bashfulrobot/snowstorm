@@ -35,3 +35,7 @@ go.work.sum
 !/internal/gosnowflake/*.so
 !/internal/gosnowflake/*.dll
 !/internal/gosnowflake/*.dylib
+
+# build output
+/snowstorm
+/dist/
