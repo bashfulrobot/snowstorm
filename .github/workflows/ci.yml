@@ -4,6 +4,9 @@ on:
   pull_request:
   push:
     branches: [main]
+  schedule:
+    # weekly, so newly published CVEs surface without a code change
+    - cron: "17 6 * * 1"
 
 permissions:
   contents: read
@@ -15,11 +18,31 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version-file: go.mod
+          go-version: "1.26"
       - run: go vet ./...
       - run: go test ./...
       - name: Verify vendored driver
         run: scripts/verify-vendored-gosnowflake.sh
+
+  # Grype (via Syft) scans the compiled binary. A source scan reads go.sum,
+  # which lists modules that are not compiled in (brotli, thrift) and floods
+  # the report with false positives. The binary lists only what ships.
+  # Fails on any high or critical finding that has a fix.
+  vuln-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: "1.26"
+      - run: go build -trimpath -o scan-target/snowstorm .
+      - uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          path: scan-target
+          fail-build: true
+          output-format: table
+          severity-cutoff: high
+          only-fixed: true
 
   cross-build:
     runs-on: ubuntu-latest
@@ -30,7 +53,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version-file: go.mod
+          go-version: "1.26"
       - name: Build ${{ matrix.target }}
         env:
           CGO_ENABLED: "0"
