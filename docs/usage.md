@@ -106,3 +106,4 @@ snowstorm query -c my_connection --saved whoami --format json --skip-pick --skip
 | `--home` | Directory containing `connections.toml` |
 | `--timeout` | Timeout for the initial connection check (default 30s) |
 | `--no-color` | Disable colored `Error:` prefix (also `NO_COLOR`) |
+| `-v, --version` | Print the version and exit. Release builds show the tag, Nix builds show `devel-<revision>` |
