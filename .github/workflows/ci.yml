@@ -4,6 +4,9 @@ on:
   pull_request:
   push:
     branches: [main]
+  schedule:
+    # weekly, so newly published CVEs surface without a code change
+    - cron: "17 6 * * 1"
 
 permissions:
   contents: read
@@ -20,6 +23,19 @@ jobs:
       - run: go test ./...
       - name: Verify vendored driver
         run: scripts/verify-vendored-gosnowflake.sh
+
+  # Grype (via Syft) scans go.mod and go.sum dependencies against its
+  # vulnerability database. Fails on any high or critical finding that has a fix.
+  vuln-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          path: "."
+          fail-build: true
+          severity-cutoff: high
+          only-fixed: true
 
   cross-build:
     runs-on: ubuntu-latest
