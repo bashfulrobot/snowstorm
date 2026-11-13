@@ -33,6 +33,9 @@ const envConnectionName = "SNOWFLAKE_DEFAULT_CONNECTION_NAME"
 var rootCmd = &cobra.Command{
 	Use:   "snowstorm",
 	Short: "Snowflake data-access CLI: run queries, get structured JSON back",
+	// Version makes cobra add a --version flag (and -v) that prints
+	// "snowstorm <version>" and exits before any command or config loading.
+	Version: buildVersion(),
 	Long: `snowstorm connects to Snowflake using a named connection from
 ~/.snowflake/connections.toml (the same file the Snowflake CLI/connector
 tooling reads) and runs SQL against it, returning structured JSON.

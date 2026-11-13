@@ -21,6 +21,7 @@ builds:
       - -trimpath
     ldflags:
       - -s -w
+      - -X github.com/bashfulrobot/snowstorm/internal/cli.Version={{ .Tag }}
 
 archives:
   - formats: [tar.gz]

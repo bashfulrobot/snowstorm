@@ -23,6 +23,12 @@
 
           src = ./.;
 
+          # A Nix build has no VCS info or module version, so stamp the flake
+          # revision into `snowstorm --version`.
+          ldflags = [
+            "-X github.com/bashfulrobot/snowstorm/internal/cli.Version=devel-${self.shortRev or self.dirtyShortRev or "unknown"}"
+          ];
+
           vendorHash = "sha256-lZnCDDUkrQQfijZGa1tuePDoIJPdIkuFpaDZsU81hUs=";
 
           meta = with pkgs.lib; {
