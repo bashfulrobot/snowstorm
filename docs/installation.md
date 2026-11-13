@@ -6,9 +6,9 @@ Each option is an alternative to the others, so do not run more than one.
 | Option | Best for | Needs |
 | --- | --- | --- |
 | 1. Release binary | Most users | `tar`, `curl` or a browser |
-| 2. `go install` | Go developers | Go 1.26.5+ |
+| 2. `go install` | Go developers | Go 1.26.9+ |
 | 3. Nix | Nix users | Nix with flakes |
-| 4. Build from source | Contributors | Go 1.26.5+, a clone |
+| 4. Build from source | Contributors | Go 1.26.9+, a clone |
 
 ## Option 1: Release binary
 
@@ -30,7 +30,8 @@ On macOS, a downloaded binary may be quarantined. Clear it with
 
 ## Option 2: go install
 
-Needs Go 1.26.5 or newer (see `go.mod`).
+Needs Go 1.26.9 or newer (see `go.mod`). Older Go versions have standard library
+vulnerabilities fixed in 1.26.9, so `go.mod` requires it.
 
 ```sh
 go install github.com/bashfulrobot/snowstorm@latest
