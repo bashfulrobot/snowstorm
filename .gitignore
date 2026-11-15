@@ -39,3 +39,7 @@ go.work.sum
 # build output
 /snowstorm
 /dist/
+
+# Per-machine Claude Code state: local permissions and session worktrees.
+.claude/settings.local.json
+.claude/worktrees/
